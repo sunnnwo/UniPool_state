@@ -19,6 +19,7 @@
   import FactoryCard from '../components/FactoryCard.svelte';
   import PairCard from '../components/PairCard.svelte';
   import VaultCard from '../components/VaultCard.svelte';
+  import { sidebarStore } from '$lib/sidebar.svelte';
 
   // ─── 상태 타입 정의 ────────────────────────────────────────────────────────
   type Snapshot = {
@@ -189,6 +190,9 @@
       states[key].pairs = toPairs;
       states[key].vault = toVault;
       states[key].loadedAt = to;
+      sidebarStore.setFactory(key, config.name, config.factory);
+      sidebarStore.setPairsForChain(key, config.name, toPairs);
+      sidebarStore.setVault(key, config.name, toVault.address);
     } catch (e) {
       states[key].error = e instanceof Error ? e.message : 'Unknown error';
     } finally {
@@ -240,11 +244,13 @@
       //        기다리는 동안 브라우저는 다른 작업(UI 업데이트 등)을 계속할 수 있다.
       const factory = await fetchFactoryData(config);
       states[key].factory = factory;  // 즉시 UI에 Factory 카드 표시
+      sidebarStore.setFactory(key, config.name, config.factory);
 
       // 2단계: Pair 목록
       // factory.allPairsLength를 재사용 → Factory를 다시 호출하지 않아도 됨
       const pairs = await fetchAllPairs(config, config.factory, factory.allPairsLength);
       states[key].pairs = pairs;  // 즉시 UI에 Pair 카드들 표시
+      sidebarStore.setPairsForChain(key, config.name, pairs);
 
       // 3단계: Vault
       // pairs에서 token0, token1 주소를 모두 추출 → 중복 제거 → Vault에 한 번만 조회
@@ -264,6 +270,7 @@
       const uniqueTokens = [...new Set(allTokens)] as `0x${string}`[];
       const vault = await fetchVaultData(config, factory.vault, uniqueTokens);
       states[key].vault = vault;
+      sidebarStore.setVault(key, config.name, vault.address);
     } catch (e) {
       states[key].error = e instanceof Error ? e.message : 'Unknown error';
     } finally {
@@ -475,15 +482,17 @@
           <p class="state-msg error">{states[key as ChainKey].error}</p>
 
         {:else if chainHasMatch(config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault, states[key as ChainKey].pairs)}
-          <FactoryCard
-            chainLabel={config.name}
-            data={states[key as ChainKey].factory}
-            prevData={states[key as ChainKey].baseline?.factory ?? null}
-            loading={false}
-            error={null}
-          />
+          {#if sidebarStore.selectedFactoryCount === 0 || sidebarStore.isFactorySelected(key as ChainKey)}
+            <FactoryCard
+              chainLabel={config.name}
+              data={states[key as ChainKey].factory}
+              prevData={states[key as ChainKey].baseline?.factory ?? null}
+              loading={false}
+              error={null}
+            />
+          {/if}
 
-          {#if states[key as ChainKey].vault}
+          {#if states[key as ChainKey].vault && (sidebarStore.selectedVaultCount === 0 || sidebarStore.isVaultSelected(key as ChainKey))}
             {@const symMap = Object.fromEntries(
               states[key as ChainKey].pairs.flatMap((p) => [
                 [p.token0.toLowerCase(), p.token0Symbol],
@@ -500,10 +509,13 @@
           <!-- Pair 카드 목록 -->
           {#if states[key as ChainKey].pairs.length > 0}
             {@const filtered = filterPairs(states[key as ChainKey].pairs, config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault)}
+            {@const visible = sidebarStore.selectedCount > 0
+              ? filtered.filter(p => sidebarStore.isSelected(p.address))
+              : filtered}
             <div class="pairs-label">
-              Pairs ({filtered.length} / {states[key as ChainKey].pairs.length})
+              Pairs ({visible.length} / {states[key as ChainKey].pairs.length})
             </div>
-            {#each filtered as pair (pair.address)}
+            {#each visible as pair (pair.address)}
               {@const prevPair = states[key as ChainKey].baseline?.pairs.find(p => p.address === pair.address) ?? null}
               {@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
               <PairCard data={pair} prevData={prevPair} history={pairHistory} chainLabel={config.name} />
