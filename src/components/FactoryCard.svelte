@@ -73,6 +73,11 @@
 	// 버튼 클릭 → copied = 키 → 1초 후 null 복원 → 버튼 라벨 원상복구.
 	let copied = $state<string | null>(null);
 
+	let dtTipText = $state('');
+	let dtTipX = $state(0);
+	let dtTipY = $state(0);
+	let dtTipVisible = $state(false);
+
 	// 42자리 이더리움 주소 → "0x1234...abcd" 단축 표시.
 	function shortenAddress(addr: string | undefined): string {
 		if (!addr) return '—';
@@ -123,7 +128,16 @@
 	}
 </script>
 
-<div class="card">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="card" onmousemove={(e) => {
+	const dt = (e.target as Element)?.closest?.('dt') as HTMLElement | null;
+	if (dt?.dataset.fn) {
+		dtTipText = dt.dataset.fn;
+		dtTipX = Math.min(e.clientX + 14, window.innerWidth - 340);
+		dtTipY = e.clientY - 52;
+		dtTipVisible = true;
+	} else { dtTipVisible = false; }
+}} onmouseleave={() => { dtTipVisible = false; }}>
 	<!-- ─ 카드 헤더: 타이틀 + 전체 복사 버튼 ─ -->
 	<div class="card-header">
 		<h2>{chainLabel} — Factory</h2>
@@ -153,7 +167,7 @@
 			<h3>Addresses</h3>
 			<dl>
 				<div class="row">
-					<dt>Fee Collector</dt>
+					<dt data-fn="getFeeCollector() — Address that collects protocol fees">Fee Collector</dt>
 					<dd>
 						<span title={data.feeCollector}>{shortenAddress(data.feeCollector)}</span>
 						<button class="copy-icon" onclick={() => copy('feeCollector', data.feeCollector)}>
@@ -162,7 +176,7 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Beacon</dt>
+					<dt data-fn="getBeaconAddress() — Beacon proxy implementation address; updating it upgrades all Pair contracts at once">Beacon</dt>
 					<dd>
 						<span title={data.beaconAddress}>{shortenAddress(data.beaconAddress)}</span>
 						<button class="copy-icon" onclick={() => copy('beacon', data.beaconAddress)}>
@@ -171,7 +185,7 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Vault</dt>
+					<dt data-fn="getVault() — Vault contract that deposits idle funds into Aave to earn yield">Vault</dt>
 					<dd>
 						<span title={data.vault}>{shortenAddress(data.vault)}</span>
 						<button class="copy-icon" onclick={() => copy('vault', data.vault)}>
@@ -180,7 +194,7 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Aave Pool</dt>
+					<dt data-fn="getAavePool() — Aave lending pool address connected to this factory">Aave Pool</dt>
 					<dd>
 						<span title={data.aavePool}>{shortenAddress(data.aavePool)}</span>
 						<button class="copy-icon" onclick={() => copy('aavePool', data.aavePool)}>
@@ -189,7 +203,7 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Total Pairs</dt>
+					<dt data-fn="getAllPairsLength() — Number of Pair pools deployed by this factory">Total Pairs</dt>
 					<dd>{data.allPairsLength.toString()}</dd>
 				</div>
 			</dl>
@@ -205,21 +219,21 @@
 			<h3>Fees</h3>
 			<dl>
 				<div class="row">
-					<dt>LP Fee</dt>
+					<dt data-fn="getFeesBps()[0] — Swap fee paid to LP (liquidity providers)">LP Fee</dt>
 					<dd>
 						{bpsToPercent(data.fees.feeLp)}
 						{#if prevData}{@const lbl = nd(data.fees.feeLp, prevData.fees.feeLp)}{#if lbl}<span class="diff {nd_dir(data.fees.feeLp, prevData.fees.feeLp)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Pool Fee</dt>
+					<dt data-fn="getFeesBps()[1] — Swap fee collected by the protocol (sent to feeCollector)">Pool Fee</dt>
 					<dd>
 						{bpsToPercent(data.fees.feePool)}
 						{#if prevData}{@const lbl = nd(data.fees.feePool, prevData.fees.feePool)}{#if lbl}<span class="diff {nd_dir(data.fees.feePool, prevData.fees.feePool)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Burn Fee</dt>
+					<dt data-fn="getFeesBps()[2] — Fee charged when LP tokens are burned">Burn Fee</dt>
 					<dd>
 						{bpsToPercent(data.fees.burnFee)}
 						{#if prevData}{@const lbl = nd(data.fees.burnFee, prevData.fees.burnFee)}{#if lbl}<span class="diff {nd_dir(data.fees.burnFee, prevData.fees.burnFee)}">{lbl}</span>{/if}{/if}
@@ -240,35 +254,35 @@
 			<h3>Interest Rate Model</h3>
 			<dl>
 				<div class="row">
-					<dt>Protocol Fee</dt>
+					<dt data-fn="getInterestParamsBps() → protocolFeeBps — Share of interest revenue taken by the protocol">Protocol Fee</dt>
 					<dd>
 						{bpsToPercent(data.interestParams.protocolFeeBps)}
 						{#if prevData}{@const lbl = nd(data.interestParams.protocolFeeBps, prevData.interestParams.protocolFeeBps)}{#if lbl}<span class="diff {nd_dir(data.interestParams.protocolFeeBps, prevData.interestParams.protocolFeeBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Optimal Point</dt>
+					<dt data-fn="getInterestParamsBps() → optimalPointBps — Utilization rate at which the interest curve kinks; above this, interest rises sharply">Optimal Point</dt>
 					<dd>
 						{bpsToPercent(data.interestParams.optimalPointBps)}
 						{#if prevData}{@const lbl = nd(data.interestParams.optimalPointBps, prevData.interestParams.optimalPointBps)}{#if lbl}<span class="diff {nd_dir(data.interestParams.optimalPointBps, prevData.interestParams.optimalPointBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Base Rate</dt>
+					<dt data-fn="getInterestParamsBps() → interestRateBaseBps — Annual interest rate at 0% utilization">Base Rate</dt>
 					<dd>
 						{bpsToPercent(data.interestParams.interestRateBaseBps)}
 						{#if prevData}{@const lbl = nd(data.interestParams.interestRateBaseBps, prevData.interestParams.interestRateBaseBps)}{#if lbl}<span class="diff {nd_dir(data.interestParams.interestRateBaseBps, prevData.interestParams.interestRateBaseBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Optimal Rate</dt>
+					<dt data-fn="getInterestParamsBps() → interestRateOptimalBps — Annual interest rate at optimal utilization">Optimal Rate</dt>
 					<dd>
 						{bpsToPercent(data.interestParams.interestRateOptimalBps)}
 						{#if prevData}{@const lbl = nd(data.interestParams.interestRateOptimalBps, prevData.interestParams.interestRateOptimalBps)}{#if lbl}<span class="diff {nd_dir(data.interestParams.interestRateOptimalBps, prevData.interestParams.interestRateOptimalBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Add Rate</dt>
+					<dt data-fn="getInterestParamsBps() → interestRateAddBps — Additional rate applied above optimal utilization to discourage excess borrowing">Add Rate</dt>
 					<dd>
 						{bpsToPercent(data.interestParams.interestRateAddBps)}
 						{#if prevData}{@const lbl = nd(data.interestParams.interestRateAddBps, prevData.interestParams.interestRateAddBps)}{#if lbl}<span class="diff {nd_dir(data.interestParams.interestRateAddBps, prevData.interestParams.interestRateAddBps)}">{lbl}</span>{/if}{/if}
@@ -290,28 +304,28 @@
 			<h3>Borrow / Liquidation</h3>
 			<dl>
 				<div class="row">
-					<dt>Borrow Limit</dt>
+					<dt data-fn="getBorrowLimitBps() — Max borrow ratio relative to collateral value (LTV). e.g. 8000 bps = 80%">Borrow Limit</dt>
 					<dd>
 						{bpsToPercent(data.borrowLimitBps)}
 						{#if prevData}{@const lbl = nd(data.borrowLimitBps, prevData.borrowLimitBps)}{#if lbl}<span class="diff {nd_dir(data.borrowLimitBps, prevData.borrowLimitBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Liquidation Penalty</dt>
+					<dt data-fn="getLiquidationPenaltyBps() — Bonus paid to liquidators when a position is liquidated">Liquidation Penalty</dt>
 					<dd>
 						{bpsToPercent(data.liquidationPenaltyBps)}
 						{#if prevData}{@const lbl = nd(data.liquidationPenaltyBps, prevData.liquidationPenaltyBps)}{#if lbl}<span class="diff {nd_dir(data.liquidationPenaltyBps, prevData.liquidationPenaltyBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Max Borrow / Tick</dt>
+					<dt data-fn="getMaxBorrowPerTickAndRange()[0] — Max borrow ratio per single price tick (prevents concentration risk)">Max Borrow / Tick</dt>
 					<dd>
 						{bpsToPercent(data.maxBorrowPerTick)}
 						{#if prevData}{@const lbl = nd(data.maxBorrowPerTick, prevData.maxBorrowPerTick)}{#if lbl}<span class="diff {nd_dir(data.maxBorrowPerTick, prevData.maxBorrowPerTick)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Max Borrow / Range</dt>
+					<dt data-fn="getMaxBorrowPerTickAndRange()[1] — Max borrow ratio across a continuous range of ticks">Max Borrow / Range</dt>
 					<dd>
 						{bpsToPercent(data.maxBorrowPerRange)}
 						{#if prevData}{@const lbl = nd(data.maxBorrowPerRange, prevData.maxBorrowPerRange)}{#if lbl}<span class="diff {nd_dir(data.maxBorrowPerRange, prevData.maxBorrowPerRange)}">{lbl}</span>{/if}{/if}
@@ -331,7 +345,7 @@
 			<h3>Price / Tick</h3>
 			<dl>
 				<div class="row">
-					<dt>Price Decay</dt>
+					<dt data-fn="getPriceDecay() — Speed at which the virtual price converges to the market price. Higher value = faster convergence">Price Decay</dt>
 					<dd>
 						{data.priceDecay.toString()}
 						{#if prevData && data.priceDecay !== prevData.priceDecay}
@@ -341,14 +355,14 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Swap Tolerance</dt>
+					<dt data-fn="getSwapPriceToleranceBps() — Max slippage allowed during a swap (expected vs actual execution price)">Swap Tolerance</dt>
 					<dd>
 						{bpsToPercent(data.swapPriceToleranceBps)}
 						{#if prevData}{@const lbl = nd(data.swapPriceToleranceBps, prevData.swapPriceToleranceBps)}{#if lbl}<span class="diff {nd_dir(data.swapPriceToleranceBps, prevData.swapPriceToleranceBps)}">{lbl}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Tick Buffer</dt>
+					<dt data-fn="getTickBuffer() — Extra ticks added during liquidation calculation as a safety margin against sudden price moves">Tick Buffer</dt>
 					<dd>
 						{data.tickBuffer}
 						{#if prevData && data.tickBuffer !== prevData.tickBuffer}
@@ -362,6 +376,9 @@
 	{/if}
 </div>
 
+{#if dtTipVisible && dtTipText}
+	<div class="fn-tip" style="left:{dtTipX}px;top:{dtTipY}px">{dtTipText}</div>
+{/if}
 
 <style>
 	/* ─ 카드 전체 ─────────────────────────────────────────────────────────── */
@@ -398,7 +415,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: #64748b;
-		margin: 0 0 0.5rem;
+		margin: 0 0 0.15rem;
 	}
 
 	/* ─ dl / 행 레이아웃 ──────────────────────────────────────────────────── */
@@ -471,6 +488,8 @@
 	}
 	.state-msg.error { color: #ef4444; }
 	.state-msg.muted { color: #94a3b8; }
+
+	dt[data-fn] { cursor: help; }
 
 	/* ─ diff 배지: 값이 올랐으면 초록, 내렸으면 빨강 ──────────────────────── */
 	.diff {

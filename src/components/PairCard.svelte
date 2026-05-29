@@ -108,6 +108,12 @@
 	const t1 = $derived(data.token1Symbol ? ` (${data.token1Symbol})` : '');
 	const factoryLabel = $derived(FACTORY_NAME[data.factory.toLowerCase()] ?? shortenAddress(data.factory));
 
+	// 함수명 툴팁 상태 (dt[data-fn] 위에 마우스 올릴 때 표시)
+	let dtTipText = $state('');
+	let dtTipX = $state(0);
+	let dtTipY = $state(0);
+	let dtTipVisible = $state(false);
+
 	// $state: 복사 피드백 상태. 어떤 버튼이 최근에 눌렸는지 키를 저장.
 	let copied = $state<string | null>(null);
 
@@ -211,7 +217,18 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="pair-card" onmousemove={(e) => { if (hoveredField) moveTip(e); }}>
+<div class="pair-card" onmousemove={(e) => {
+	if (hoveredField) moveTip(e);
+	const dt = (e.target as Element)?.closest?.('dt') as HTMLElement | null;
+	if (dt?.dataset.fn) {
+		dtTipText = dt.dataset.fn;
+		dtTipX = Math.min(e.clientX + 14, window.innerWidth - 340);
+		dtTipY = e.clientY - 52;
+		dtTipVisible = true;
+	} else {
+		dtTipVisible = false;
+	}
+}} onmouseleave={() => { dtTipVisible = false; }}>
 	<div class="pair-header">
 		<div>
 			<h3>
@@ -232,7 +249,7 @@
 		<h4>Tokens</h4>
 		<dl>
 			<div class="row">
-				<dt>Token 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
+				<dt data-fn="getTokens()[0]">Token 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
 				<dd>
 					<span title={data.token0}>{shortenAddress(data.token0)}</span>
 					<button class="copy-icon" onclick={() => copy('t0', data.token0)}
@@ -241,7 +258,7 @@
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Token 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
+				<dt data-fn="getTokens()[1]">Token 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
 				<dd>
 					<span title={data.token1}>{shortenAddress(data.token1)}</span>
 					<button class="copy-icon" onclick={() => copy('t1', data.token1)}
@@ -250,7 +267,7 @@
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Factory</dt>
+				<dt data-fn="getFactory()">Factory</dt>
 				<dd>
 					<span class="factory-badge" title={data.factory}>{factoryLabel}</span>
 					<button class="copy-icon" onclick={() => copy('fac', data.factory)}
@@ -258,9 +275,9 @@
 					>
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('supply', 'LP Token Supply', (p) => Number(p.totalSupply) / 10 ** p.decimals, e)} onmouseleave={leaveSpark}>
-				<dt title="LP 토큰 총 발행량. 유동성 공급자가 예치한 증거로 받은 LP 토큰의 합계. burn하면 예치 토큰을 돌려받음.">LP Token Supply</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="totalSupply() — Total supply of LP tokens issued to liquidity providers as proof of deposit">LP Token Supply</dt>
+				<dd onmouseenter={(e) => enterSpark('supply', 'LP Token Supply', (p) => Number(p.totalSupply) / 10 ** p.decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.totalSupply, data.decimals)}
 					{#if prevData}{@const d = bd(data.totalSupply, prevData.totalSupply, data.decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
@@ -271,16 +288,16 @@
 	<section>
 		<h4>Reserves</h4>
 		<dl>
-			<div class="row" onmouseenter={(e) => enterSpark('r0', `Reserve 0${t0}`, (p) => Number(p.reserve0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
-				<dt>Reserve 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getReserves()[0] — Actual token0 balance held by this Pair">Reserve 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('r0', `Reserve 0${t0}`, (p) => Number(p.reserve0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.reserve0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}
 					{#if prevData}{@const d = bd(data.reserve0, prevData.reserve0, data.token0Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('r1', `Reserve 1${t1}`, (p) => Number(p.reserve1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
-				<dt>Reserve 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getReserves()[1] — Actual token1 balance held by this Pair">Reserve 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('r1', `Reserve 1${t1}`, (p) => Number(p.reserve1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.reserve1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}
 					{#if prevData}{@const d = bd(data.reserve1, prevData.reserve1, data.token1Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
@@ -292,42 +309,42 @@
 		<h4>Fees</h4>
 		<dl>
 			<div class="row">
-				<dt>LP Fee</dt>
+				<dt data-fn="getFeesBps()[0] — Swap fee paid to LP (liquidity providers)">LP Fee</dt>
 				<dd>
 					{bpsToPercent(data.fees.feeLp)}
 					{#if prevData}{@const d = nd(data.fees.feeLp, prevData.fees.feeLp)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Pool Fee</dt>
+				<dt data-fn="getFeesBps()[1] — Swap fee collected by the protocol (sent to feeCollector)">Pool Fee</dt>
 				<dd>
 					{bpsToPercent(data.fees.feePool)}
 					{#if prevData}{@const d = nd(data.fees.feePool, prevData.fees.feePool)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Burn Fee</dt>
+				<dt data-fn="getFeesBps()[2] — Fee charged when LP tokens are burned">Burn Fee</dt>
 				<dd>
 					{bpsToPercent(data.fees.burnFee)}
 					{#if prevData}{@const d = nd(data.fees.burnFee, prevData.fees.burnFee)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Loan Fee 0</dt>
+				<dt data-fn="getLoanFeesBps()[0] — Fee charged for token0 flash loans">Loan Fee 0</dt>
 				<dd>
 					{bpsToPercent(data.loanFees.loanFee0)}
 					{#if prevData}{@const d = nd(data.loanFees.loanFee0, prevData.loanFees.loanFee0)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Loan Fee 1</dt>
+				<dt data-fn="getLoanFeesBps()[1] — Fee charged for token1 flash loans">Loan Fee 1</dt>
 				<dd>
 					{bpsToPercent(data.loanFees.loanFee1)}
 					{#if prevData}{@const d = nd(data.loanFees.loanFee1, prevData.loanFees.loanFee1)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Fee Collector</dt>
+				<dt data-fn="getFeeCollector() — Address that collects protocol fees">Fee Collector</dt>
 				<dd>
 					<span title={data.feeCollector}>{shortenAddress(data.feeCollector)}</span>
 					<button class="copy-icon" onclick={() => copy('fc', data.feeCollector)}
@@ -341,45 +358,44 @@
 	<section>
 		<!-- 토큰별 IRM은 독립적으로 설정 가능 (예: 스테이블코인 vs 변동성 자산에 다른 이자 곡선).
 		     값이 같더라도 별도 파라미터이므로 컬럼으로 나란히 표시해 비교가 쉽게 함. -->
-		<h4>Interest Rate Model</h4>
-		<dl>
-			<div class="row irm-head">
-				<dt></dt>
-				<dd>
-					<span class="irm-th">{data.token0Symbol || 'Token 0'}</span>
-					<span class="irm-th">{data.token1Symbol || 'Token 1'}</span>
-				</dd>
+		<div class="irm-header">
+			<h4>Interest Rate Model</h4>
+			<div class="irm-col-labels">
+				<span class="irm-th">{data.token0Symbol || 'Token 0'}</span>
+				<span class="irm-th">{data.token1Symbol || 'Token 1'}</span>
 			</div>
+		</div>
+		<dl>
 			<div class="row">
-				<dt title="이자 수익 중 프로토콜이 가져가는 비율">Protocol Fee</dt>
+				<dt data-fn="getInterestParamsBps() → protocolFeeBps — Share of interest revenue taken by the protocol">Protocol Fee</dt>
 				<dd>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token0.protocolFeeBps)}{#if prevData}{@const d = nd(data.interestParams.token0.protocolFeeBps, prevData.interestParams.token0.protocolFeeBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token1.protocolFeeBps)}{#if prevData}{@const d = nd(data.interestParams.token1.protocolFeeBps, prevData.interestParams.token1.protocolFeeBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 				</dd>
 			</div>
 			<div class="row">
-				<dt title="이자율 곡선이 꺾이는 사용률 기준점. 이 이상이면 이자율이 급등함.">Optimal Point</dt>
+				<dt data-fn="getInterestParamsBps() → optimalPointBps — Utilization rate at which the interest curve kinks; above this, interest rises sharply">Optimal Point</dt>
 				<dd>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token0.optimalPointBps)}{#if prevData}{@const d = nd(data.interestParams.token0.optimalPointBps, prevData.interestParams.token0.optimalPointBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token1.optimalPointBps)}{#if prevData}{@const d = nd(data.interestParams.token1.optimalPointBps, prevData.interestParams.token1.optimalPointBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 				</dd>
 			</div>
 			<div class="row">
-				<dt title="사용률 0%일 때의 기본 연이자율">Base Rate</dt>
+				<dt data-fn="getInterestParamsBps() → interestRateBaseBps — Annual interest rate at 0% utilization">Base Rate</dt>
 				<dd>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token0.interestRateBaseBps)}{#if prevData}{@const d = nd(data.interestParams.token0.interestRateBaseBps, prevData.interestParams.token0.interestRateBaseBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token1.interestRateBaseBps)}{#if prevData}{@const d = nd(data.interestParams.token1.interestRateBaseBps, prevData.interestParams.token1.interestRateBaseBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 				</dd>
 			</div>
 			<div class="row">
-				<dt title="Optimal Point 사용률에서의 연이자율">Optimal Rate</dt>
+				<dt data-fn="getInterestParamsBps() → interestRateOptimalBps — Annual interest rate at optimal utilization">Optimal Rate</dt>
 				<dd>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token0.interestRateOptimalBps)}{#if prevData}{@const d = nd(data.interestParams.token0.interestRateOptimalBps, prevData.interestParams.token0.interestRateOptimalBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token1.interestRateOptimalBps)}{#if prevData}{@const d = nd(data.interestParams.token1.interestRateOptimalBps, prevData.interestParams.token1.interestRateOptimalBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 				</dd>
 			</div>
 			<div class="row">
-				<dt title="Optimal Point 초과 시 추가되는 이자율 (급격히 올라 대출 억제)">Add Rate</dt>
+				<dt data-fn="getInterestParamsBps() → interestRateAddBps — Additional rate applied above optimal utilization to discourage excess borrowing">Add Rate</dt>
 				<dd>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token0.interestRateAddBps)}{#if prevData}{@const d = nd(data.interestParams.token0.interestRateAddBps, prevData.interestParams.token0.interestRateAddBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
 					<span class="irm-v">{bpsToPercent(data.interestParams.token1.interestRateAddBps)}{#if prevData}{@const d = nd(data.interestParams.token1.interestRateAddBps, prevData.interestParams.token1.interestRateAddBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
@@ -391,80 +407,80 @@
 	<section>
 		<h4>Borrow State</h4>
 		<dl>
-			<div class="row" onmouseenter={(e) => enterSpark('b0', `Total Borrowed 0${t0}`, (p) => Number(p.totalBorrowed0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
-				<dt>Total Borrowed 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getTotalBorrowed0() — Outstanding token0 borrow amount">Total Borrowed 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('b0', `Total Borrowed 0${t0}`, (p) => Number(p.totalBorrowed0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.totalBorrowed0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}
 					{#if prevData}{@const d = bd(data.totalBorrowed0, prevData.totalBorrowed0, data.token0Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('b1', `Total Borrowed 1${t1}`, (p) => Number(p.totalBorrowed1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
-				<dt>Total Borrowed 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getTotalBorrowed1() — Outstanding token1 borrow amount">Total Borrowed 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('b1', `Total Borrowed 1${t1}`, (p) => Number(p.totalBorrowed1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.totalBorrowed1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}
 					{#if prevData}{@const d = bd(data.totalBorrowed1, prevData.totalBorrowed1, data.token1Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('f0', `Pool Fees 0${t0}`, (p) => Number(p.accumulatedPoolFees.fee0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
-				<dt>Pool Fees 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getAccumulatedPoolFees()[0] — Accumulated token0 pool fees not yet distributed">Pool Fees 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('f0', `Pool Fees 0${t0}`, (p) => Number(p.accumulatedPoolFees.fee0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.accumulatedPoolFees.fee0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}
 					{#if prevData}{@const d = bd(data.accumulatedPoolFees.fee0, prevData.accumulatedPoolFees.fee0, data.token0Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('f1', `Pool Fees 1${t1}`, (p) => Number(p.accumulatedPoolFees.fee1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
-				<dt>Pool Fees 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getAccumulatedPoolFees()[1] — Accumulated token1 pool fees not yet distributed">Pool Fees 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('f1', `Pool Fees 1${t1}`, (p) => Number(p.accumulatedPoolFees.fee1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
 					{formatAmount(data.accumulatedPoolFees.fee1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}
 					{#if prevData}{@const d = bd(data.accumulatedPoolFees.fee1, prevData.accumulatedPoolFees.fee1, data.token1Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('m0', 'Interest Multiplier 0', (p) => Number(p.interestMultiplier0) / 1e27, e)} onmouseleave={leaveSpark}>
-				<dt>Interest Multiplier 0</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getInterestMultiplier0() — token0 interest accumulation multiplier in RAY (10²⁷). Starts at 1×, increases as interest accrues">Interest Multiplier 0</dt>
+				<dd onmouseenter={(e) => enterSpark('m0', 'Interest Multiplier 0', (p) => Number(p.interestMultiplier0) / 1e27, e)} onmouseleave={leaveSpark}>
 					{(Number(data.interestMultiplier0) / 1e27).toFixed(6)}<span class="unit">×</span>
 					{#if prevData}{@const d = rd(data.interestMultiplier0, prevData.interestMultiplier0, false)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('m1', 'Interest Multiplier 1', (p) => Number(p.interestMultiplier1) / 1e27, e)} onmouseleave={leaveSpark}>
-				<dt>Interest Multiplier 1</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getInterestMultiplier1() — token1 interest accumulation multiplier in RAY (10²⁷). Starts at 1×, increases as interest accrues">Interest Multiplier 1</dt>
+				<dd onmouseenter={(e) => enterSpark('m1', 'Interest Multiplier 1', (p) => Number(p.interestMultiplier1) / 1e27, e)} onmouseleave={leaveSpark}>
 					{(Number(data.interestMultiplier1) / 1e27).toFixed(6)}<span class="unit">×</span>
 					{#if prevData}{@const d = rd(data.interestMultiplier1, prevData.interestMultiplier1, false)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('rate0', 'Variable Rate 0', (p) => Number(p.variableInterestRate0) / 1e27 * 100, e)} onmouseleave={leaveSpark}>
-				<dt>Variable Rate 0</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="calcVariableInterestRate0() — Current variable annual interest rate for token0 based on utilization">Variable Rate 0</dt>
+				<dd onmouseenter={(e) => enterSpark('rate0', 'Variable Rate 0', (p) => Number(p.variableInterestRate0) / 1e27 * 100, e)} onmouseleave={leaveSpark}>
 					{((Number(data.variableInterestRate0) / 1e27) * 100).toFixed(4)}<span class="unit">%</span>
 					{#if prevData}{@const d = rd(data.variableInterestRate0, prevData.variableInterestRate0, true)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('rate1', 'Variable Rate 1', (p) => Number(p.variableInterestRate1) / 1e27 * 100, e)} onmouseleave={leaveSpark}>
-				<dt>Variable Rate 1</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="calcVariableInterestRate1() — Current variable annual interest rate for token1 based on utilization">Variable Rate 1</dt>
+				<dd onmouseenter={(e) => enterSpark('rate1', 'Variable Rate 1', (p) => Number(p.variableInterestRate1) / 1e27 * 100, e)} onmouseleave={leaveSpark}>
 					{((Number(data.variableInterestRate1) / 1e27) * 100).toFixed(4)}<span class="unit">%</span>
 					{#if prevData}{@const d = rd(data.variableInterestRate1, prevData.variableInterestRate1, true)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Last Update</dt>
+				<dt data-fn="getLastUpdateTimestamp() — Timestamp of the last on-chain state update">Last Update</dt>
 				<dd>{formatTimestamp(data.lastUpdateTimestamp)}</dd>
 			</div>
 			<div class="row">
-				<dt>Next Loan ID</dt>
+				<dt data-fn="getNextLoanId() — ID assigned to the next loan. Acts as a total loan count counter">Next Loan ID</dt>
 				<dd>{data.nextLoanId.toString()}</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('yacc0', `Yield Acc 0${t0}`, (p) => Number(p.lastYieldAccumulator.yieldAcc0) / 1e27, e)} onmouseleave={leaveSpark}>
-				<dt title="마지막 온체인 업데이트 시점의 token0 이자 누산기. 현재 interestMultiplier와 비교해 미반영 이자를 계산할 수 있음.">Last Yield Acc 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getLastYieldAccumulator()[0] — token0 yield accumulator at last on-chain update. Difference from interestMultiplier reveals pending unrecorded interest">Last Yield Acc 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('yacc0', `Yield Acc 0${t0}`, (p) => Number(p.lastYieldAccumulator.yieldAcc0) / 1e27, e)} onmouseleave={leaveSpark}>
 					{(Number(data.lastYieldAccumulator.yieldAcc0) / 1e27).toFixed(6)}<span class="unit">×</span>
 					{#if prevData}{@const d = rd(data.lastYieldAccumulator.yieldAcc0, prevData.lastYieldAccumulator.yieldAcc0, false)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('yacc1', `Yield Acc 1${t1}`, (p) => Number(p.lastYieldAccumulator.yieldAcc1) / 1e27, e)} onmouseleave={leaveSpark}>
-				<dt title="마지막 온체인 업데이트 시점의 token1 이자 누산기">Last Yield Acc 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getLastYieldAccumulator()[1] — token1 yield accumulator at last on-chain update">Last Yield Acc 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
+				<dd onmouseenter={(e) => enterSpark('yacc1', `Yield Acc 1${t1}`, (p) => Number(p.lastYieldAccumulator.yieldAcc1) / 1e27, e)} onmouseleave={leaveSpark}>
 					{(Number(data.lastYieldAccumulator.yieldAcc1) / 1e27).toFixed(6)}<span class="unit">×</span>
 					{#if prevData}{@const d = rd(data.lastYieldAccumulator.yieldAcc1, prevData.lastYieldAccumulator.yieldAcc1, false)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
@@ -475,51 +491,51 @@
 	<section>
 		<h4>Pair Parameters</h4>
 		<dl>
-			<div class="row" onmouseenter={(e) => enterSpark('borrowLimit', 'Borrow Limit', (p) => p.borrowLimitBps / 100, e)} onmouseleave={leaveSpark}>
-				<dt>Borrow Limit</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getBorrowLimitBps() — Max borrow ratio relative to collateral (LTV). e.g. 8000 bps = 80% → $100 collateral allows $80 max borrow">Borrow Limit</dt>
+				<dd onmouseenter={(e) => enterSpark('borrowLimit', 'Borrow Limit', (p) => p.borrowLimitBps / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.borrowLimitBps)}
 					{#if prevData}{@const d = nd(data.borrowLimitBps, prevData.borrowLimitBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('liqPenalty', 'Liquidation Penalty', (p) => p.liquidationPenaltyBps / 100, e)} onmouseleave={leaveSpark}>
-				<dt>Liquidation Penalty</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getLiquidationPenaltyBps() — Bonus paid to liquidators when a position is liquidated">Liquidation Penalty</dt>
+				<dd onmouseenter={(e) => enterSpark('liqPenalty', 'Liquidation Penalty', (p) => p.liquidationPenaltyBps / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.liquidationPenaltyBps)}
 					{#if prevData}{@const d = nd(data.liquidationPenaltyBps, prevData.liquidationPenaltyBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('maxTick', 'Max Borrow / Tick', (p) => p.maxBorrowPerTick / 100, e)} onmouseleave={leaveSpark}>
-				<dt>Max Borrow / Tick</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getMaxBorrowPerTickAndRange()[0] — Max borrow ratio per single price tick (prevents concentration risk)">Max Borrow / Tick</dt>
+				<dd onmouseenter={(e) => enterSpark('maxTick', 'Max Borrow / Tick', (p) => p.maxBorrowPerTick / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.maxBorrowPerTick)}
 					{#if prevData}{@const d = nd(data.maxBorrowPerTick, prevData.maxBorrowPerTick)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('maxRange', 'Max Borrow / Range', (p) => p.maxBorrowPerRange / 100, e)} onmouseleave={leaveSpark}>
-				<dt>Max Borrow / Range</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getMaxBorrowPerTickAndRange()[1] — Max borrow ratio across a continuous range of ticks">Max Borrow / Range</dt>
+				<dd onmouseenter={(e) => enterSpark('maxRange', 'Max Borrow / Range', (p) => p.maxBorrowPerRange / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.maxBorrowPerRange)}
 					{#if prevData}{@const d = nd(data.maxBorrowPerRange, prevData.maxBorrowPerRange)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('priceDecay', 'Price Decay', (p) => Number(p.priceDecay), e)} onmouseleave={leaveSpark}>
-				<dt>Price Decay</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getPriceDecay() — Speed at which virtual price converges to market price. Higher value = faster convergence">Price Decay</dt>
+				<dd onmouseenter={(e) => enterSpark('priceDecay', 'Price Decay', (p) => Number(p.priceDecay), e)} onmouseleave={leaveSpark}>
 					{data.priceDecay.toString()}
 					{#if prevData}{@const d = bd(data.priceDecay, prevData.priceDecay)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('swapTol', 'Swap Tolerance', (p) => p.swapPriceToleranceBps / 100, e)} onmouseleave={leaveSpark}>
-				<dt>Swap Tolerance</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getSwapPriceToleranceBps() — Max slippage allowed during a swap (expected vs actual execution price)">Swap Tolerance</dt>
+				<dd onmouseenter={(e) => enterSpark('swapTol', 'Swap Tolerance', (p) => p.swapPriceToleranceBps / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.swapPriceToleranceBps)}
 					{#if prevData}{@const d = nd(data.swapPriceToleranceBps, prevData.swapPriceToleranceBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
-			<div class="row" onmouseenter={(e) => enterSpark('tickBuf', 'Tick Buffer', (p) => p.tickBuffer, e)} onmouseleave={leaveSpark}>
-				<dt>Tick Buffer</dt>
-				<dd>
+			<div class="row">
+				<dt data-fn="getTickBuffer() — Extra ticks added during liquidation calculation as a safety margin against sudden price moves">Tick Buffer</dt>
+				<dd onmouseenter={(e) => enterSpark('tickBuf', 'Tick Buffer', (p) => p.tickBuffer, e)} onmouseleave={leaveSpark}>
 					{data.tickBuffer}
 					{#if prevData && data.tickBuffer !== prevData.tickBuffer}
 						{@const delta = data.tickBuffer - prevData.tickBuffer}
@@ -534,20 +550,24 @@
 		<h4>Constants</h4>
 		<dl>
 			<div class="row">
-				<dt>Min Liquidity</dt>
+				<dt data-fn="MINIMUM_LIQUIDITY() — Minimum LP tokens permanently locked at pool creation to prevent division by zero">Min Liquidity</dt>
 				<dd>{data.minimumLiquidity.toString()}</dd>
 			</div>
 			<div class="row">
-				<dt>Interest Multiplier Decimals</dt>
+				<dt data-fn="INTEREST_MULTIPLIER_DECIMALS() — Decimal precision of the interestMultiplier value">Interest Multiplier Decimals</dt>
 				<dd>{data.interestMultiplierDecimals}</dd>
 			</div>
 			<div class="row">
-				<dt>RAY Decimals</dt>
+				<dt data-fn="RAY_DECIMALS() — Decimal precision of RAY units. Always 27 (10²⁷)">RAY Decimals</dt>
 				<dd>{data.rayDecimals}</dd>
 			</div>
 		</dl>
 	</section>
 </div>
+
+{#if dtTipVisible && dtTipText}
+	<div class="fn-tip" style="left:{dtTipX}px;top:{dtTipY}px">{dtTipText}</div>
+{/if}
 
 <!-- 스파크라인 툴팁: position:fixed로 마우스 커서 근처에 표시 -->
 {#if hoveredField && sparkVals.length >= 2}
@@ -595,7 +615,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: #94a3b8;
-		margin: 0 0 0.4rem;
+		margin: 0 0 0.05rem;
 	}
 	dl {
 		margin: 0;
@@ -680,7 +700,16 @@
 	}
 
 	/* ─── Interest Rate Model 2-컬럼 레이아웃 ───────────────────────────── */
-	.irm-head dd { justify-content: flex-end; gap: 0; }
+	.irm-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.2rem;
+	}
+	.irm-header h4 { margin: 0; }
+	.irm-col-labels {
+		display: flex;
+	}
 	.irm-th {
 		font-size: 0.65rem;
 		font-weight: 600;
@@ -696,6 +725,24 @@
 		flex-wrap: wrap;
 		gap: 2px;
 	}
+
+	/* ─── 함수명 툴팁 ─────────────────────────────────────────────────────── */
+	:global(.fn-tip) {
+		position: fixed;
+		z-index: 9998;
+		background: #0f172a;
+		color: #94a3b8;
+		font-family: monospace;
+		font-size: 0.65rem;
+		padding: 5px 9px;
+		border-radius: 5px;
+		pointer-events: none;
+		max-width: 340px;
+		white-space: pre-wrap;
+		line-height: 1.5;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	}
+	dt[data-fn] { cursor: help; }
 
 	/* ─── 스파크라인 툴팁 ──────────────────────────────────────────────────── */
 	/* position: fixed → 뷰포트(화면 전체) 기준 고정 위치. 부모 overflow 영향 없음. */

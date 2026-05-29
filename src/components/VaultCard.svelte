@@ -34,6 +34,11 @@
 	// $state: 복사 피드백 상태. 어떤 버튼이 최근에 눌렸는지 키를 저장.
 	let copied = $state<string | null>(null);
 
+	let dtTipText = $state('');
+	let dtTipX = $state(0);
+	let dtTipY = $state(0);
+	let dtTipVisible = $state(false);
+
 	function shortenAddress(addr: string | undefined): string {
 		if (!addr) return '—';
 		return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -76,7 +81,16 @@
 	}
 </script>
 
-<div class="card">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="card" onmousemove={(e) => {
+	const dt = (e.target as Element)?.closest?.('dt') as HTMLElement | null;
+	if (dt?.dataset.fn) {
+		dtTipText = dt.dataset.fn;
+		dtTipX = Math.min(e.clientX + 14, window.innerWidth - 340);
+		dtTipY = e.clientY - 52;
+		dtTipVisible = true;
+	} else { dtTipVisible = false; }
+}} onmouseleave={() => { dtTipVisible = false; }}>
 	<div class="card-header">
 		<div>
 			<h2>Vault</h2>
@@ -91,7 +105,7 @@
 		<h3>Addresses</h3>
 		<dl>
 			<div class="row">
-				<dt>Factory</dt>
+				<dt data-fn="getFactory() — Factory contract that deployed this vault">Factory</dt>
 				<dd>
 					<span title={data.factory}>{shortenAddress(data.factory)}</span>
 					<button class="copy-icon" onclick={() => copy('factory', data.factory)}
@@ -100,7 +114,7 @@
 				</dd>
 			</div>
 			<div class="row">
-				<dt>Aave Pool</dt>
+				<dt data-fn="getAavePool() — Aave lending pool address where idle funds are deposited">Aave Pool</dt>
 				<dd>
 					<span title={data.aavePool}>{shortenAddress(data.aavePool)}</span>
 					<button class="copy-icon" onclick={() => copy('aave', data.aavePool)}
@@ -125,24 +139,24 @@
 			</h3>
 			<dl>
 				<div class="row">
-					<dt>Is Idle</dt>
+					<dt data-fn="getAssetStatus() — true = token held in vault (not deposited to Aave); false = deposited to Aave earning yield">Is Idle</dt>
 					<dd class:badge-green={!t.isIdle} class:badge-gray={t.isIdle}>
 						{t.isIdle ? 'Idle' : 'In Aave'}
 					</dd>
 				</div>
 				<div class="row">
-					<dt>Supported</dt>
+					<dt data-fn="getAssetData() → isSupported — Whether this token is enabled for yield management in this vault">Supported</dt>
 					<dd>{t.assetData.isSupported ? 'Yes' : 'No'}</dd>
 				</div>
 				<div class="row">
-					<dt title="RAY(10²⁷) 정규화 누산기. 초기값 1.000000×. getYieldAccumulator() 반환값.">Yield Accumulator</dt>
+					<dt data-fn="getYieldAccumulator() — Normalized yield accumulator in RAY (10²⁷). Starts at 1.000000×, increases as Aave interest accrues">Yield Accumulator</dt>
 					<dd>
 						{(Number(t.yieldAccumulator) / 1e27).toFixed(6)}<span class="unit">×</span>
 						{#if pt}{@const d = bigDiff(t.yieldAccumulator, pt.yieldAccumulator)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 					</dd>
 				</div>
 				<div class="row">
-					<dt title="마지막 온체인 업데이트 시점의 내부 누산기. 토큰별 스케일. 현재값과 차이 = 미반영 이자.">Last Yield Acc. (raw)</dt>
+					<dt data-fn="getAssetData() → lastYieldAccumulator — Raw accumulator at last on-chain update. Difference from current = pending unrecorded interest">Last Yield Acc. (raw)</dt>
 					<dd>
 						{t.assetData.lastYieldAccumulator.toString()}
 						{#if pt}{@const d = bigDiff(t.assetData.lastYieldAccumulator, pt.assetData.lastYieldAccumulator)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
@@ -154,21 +168,14 @@
 				<h4>Aave Support</h4>
 				<dl>
 					<div class="row">
-						<dt>Supported</dt>
+						<dt data-fn="getAaveTokenSupport() → isSupported — Whether Aave supports this token as a deposit asset">Supported</dt>
 						<dd>{t.aaveSupport.isSupported ? 'Yes' : 'No'}</dd>
 					</div>
 					<div class="row">
-						<dt title="Vault가 Aave에 현재 실제로 예치한 aToken 잔액. isIdle=false일 때 0 이상.">Current Balance</dt>
+						<dt data-fn="getAaveTokenSupport() → currentBalance — aToken balance held by the vault (Aave deposit receipt token). 0 when isIdle = true">Current Balance</dt>
 						<dd>
 							{t.aaveSupport.currentBalance.toString()}
 							{#if pt}{@const d = bigDiff(t.aaveSupport.currentBalance, pt.aaveSupport.currentBalance)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
-						</dd>
-					</div>
-					<div class="row">
-						<dt title="프로토콜이 Aave에 예치하려는 목표 수량. Current와 차이가 있으면 리밸런싱 대상.">Target Balance</dt>
-						<dd>
-							{t.aaveSupport.targetBalance.toString()}
-							{#if pt}{@const d = bigDiff(t.aaveSupport.targetBalance, pt.aaveSupport.targetBalance)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 						</dd>
 					</div>
 				</dl>
@@ -176,6 +183,10 @@
 		</section>
 	{/each}
 </div>
+
+{#if dtTipVisible && dtTipText}
+	<div class="fn-tip" style="left:{dtTipX}px;top:{dtTipY}px">{dtTipText}</div>
+{/if}
 
 <style>
 	.card {
@@ -292,6 +303,8 @@
 		line-height: 1;
 	}
 	.copy-icon:hover { color: #475569; }
+	dt[data-fn] { cursor: help; }
+
 	.diff {
 		font-size: 0.65rem;
 		font-weight: 600;
