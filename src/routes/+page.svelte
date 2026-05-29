@@ -482,7 +482,9 @@
           <p class="state-msg error">{states[key as ChainKey].error}</p>
 
         {:else if chainHasMatch(config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault, states[key as ChainKey].pairs)}
-          {#if sidebarStore.selectedFactoryCount === 0 || sidebarStore.isFactorySelected(key as ChainKey)}
+          {@const anySelected = sidebarStore.selectedCount > 0 || sidebarStore.selectedFactoryCount > 0 || sidebarStore.selectedVaultCount > 0}
+
+          {#if (!anySelected || sidebarStore.selectedFactoryCount > 0) && (sidebarStore.selectedFactoryCount === 0 || sidebarStore.isFactorySelected(key as ChainKey))}
             <FactoryCard
               chainLabel={config.name}
               data={states[key as ChainKey].factory}
@@ -492,7 +494,7 @@
             />
           {/if}
 
-          {#if states[key as ChainKey].vault && (sidebarStore.selectedVaultCount === 0 || sidebarStore.isVaultSelected(key as ChainKey))}
+          {#if (!anySelected || sidebarStore.selectedVaultCount > 0) && states[key as ChainKey].vault && (sidebarStore.selectedVaultCount === 0 || sidebarStore.isVaultSelected(key as ChainKey))}
             {@const symMap = Object.fromEntries(
               states[key as ChainKey].pairs.flatMap((p) => [
                 [p.token0.toLowerCase(), p.token0Symbol],
@@ -507,7 +509,7 @@
           {/if}
 
           <!-- Pair 카드 목록 -->
-          {#if states[key as ChainKey].pairs.length > 0}
+          {#if (!anySelected || sidebarStore.selectedCount > 0) && states[key as ChainKey].pairs.length > 0}
             {@const filtered = filterPairs(states[key as ChainKey].pairs, config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault)}
             {@const visible = sidebarStore.selectedCount > 0
               ? filtered.filter(p => sidebarStore.isSelected(p.address))
