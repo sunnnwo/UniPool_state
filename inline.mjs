@@ -101,13 +101,20 @@ html = html.replace('base: ""', 'base: location.pathname');
 // producing "Unsafe attempt to load URL" + "Unexpected end of input" errors.
 html = html.replace('data-sveltekit-preload-data="hover"', 'data-sveltekit-preload-data="off"');
 
-// Patch history API for file:// protocol.
-// SvelteKit's router calls history.replaceState() on boot, which browsers block
-// on file:// ("Failed to execute 'replaceState' on 'History'"). This bundle has
-// only one route, so no-oping push/replaceState is safe.
+// Patch file:// incompatibilities before the bundle runs.
+//
+// history.replaceState/pushState — blocked on file:// ("Failed to execute
+//   'replaceState' on 'History'"). Single-route bundle so no-op is safe.
+//
+// fetch intercept — SvelteKit's router internally calls fetch() for the current
+//   page URL on init. On file:// the browser blocks it at the security layer
+//   ("Unsafe attempt to load URL file://...") before JS even sees the response.
+//   Intercepting fetch() and returning an empty JSON response for non-http(s)
+//   requests prevents the call from ever reaching the browser's security check.
+//   HTTP/HTTPS requests (RPC nodes, DeFiLlama API, etc.) are passed through.
 html = html.replace(
 	'</head>',
-	`<script>if(location.protocol==='file:'){var _f=function(){};history.replaceState=_f;history.pushState=_f;}</script>\n</head>`
+	`<script>if(location.protocol==='file:'){var _noop=function(){};history.replaceState=_noop;history.pushState=_noop;var _fetch=window.fetch;window.fetch=function(r,o){var u=typeof r==='string'?r:r instanceof Request?r.url:String(r);return(u.startsWith('http://')||u.startsWith('https://'))?_fetch.call(this,r,o):Promise.resolve(new Response('{}',{status:200,headers:{'Content-Type':'application/json'}}));};}</script>\n</head>`
 );
 
 // Keep the __sveltekit_* global setup, replace only the Promise.all import block.

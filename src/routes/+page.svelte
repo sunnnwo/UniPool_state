@@ -22,13 +22,6 @@
   import { sidebarStore } from '$lib/sidebar.svelte';
 
   // ─── 상태 타입 정의 ────────────────────────────────────────────────────────
-  type Snapshot = {
-    factory: FactoryData | null;
-    vault: VaultData | null;
-    pairs: PairData[];
-    capturedAt: Date;
-  };
-
   type ChainState = {
     factory: FactoryData | null;
     pairs: PairData[];
@@ -36,7 +29,6 @@
     loading: boolean;
     error: string | null;
     loadedAt: Date | null;
-    baseline: Snapshot | null;
     // 7일 히스토리: 스파크라인 그래프용
     factoryHistory: FactoryData[];
     pairHistory: Record<string, PairData[]> | null;
@@ -69,7 +61,7 @@
   //   unknown을 경유하면 어떤 타입으로든 캐스팅 가능.
   let states = $state<Record<ChainKey, ChainState>>(
     Object.fromEntries(
-      Object.keys(CHAINS).map((k) => [k, { factory: null, pairs: [], vault: null, loading: false, error: null, loadedAt: null, baseline: null, factoryHistory: [], pairHistory: null, historyLoading: false, historyError: null }])
+      Object.keys(CHAINS).map((k) => [k, { factory: null, pairs: [], vault: null, loading: false, error: null, loadedAt: null, factoryHistory: [], pairHistory: null, historyLoading: false, historyError: null }])
     ) as unknown as Record<ChainKey, ChainState>
   );
 
@@ -168,19 +160,12 @@
   let toDate = $state('');
   let rangeError = $state<string | null>(null);
 
-  async function compareChainRange(key: ChainKey, fromBlock: bigint, toBlock: bigint, from: Date, to: Date) {
+  async function compareChainRange(key: ChainKey, toBlock: bigint, to: Date) {
     const config = CHAINS[key];
     states[key].loading = true;
     states[key].error = null;
 
     try {
-      // 시작 블록 데이터 → baseline
-      const baseFactory = await fetchFactoryData(config, fromBlock);
-      const basePairs = await fetchAllPairs(config, config.factory, baseFactory.allPairsLength, fromBlock);
-      const baseTokens = [...new Set(basePairs.flatMap((p) => [p.token0, p.token1]))] as `0x${string}`[];
-      const baseVault = await fetchVaultData(config, baseFactory.vault, baseTokens, fromBlock);
-      states[key].baseline = { factory: baseFactory, vault: baseVault, pairs: basePairs, capturedAt: from };
-
       // 종료 블록 데이터 → current
       const toFactory = await fetchFactoryData(config, toBlock);
       const toPairs = await fetchAllPairs(config, config.factory, toFactory.allPairsLength, toBlock);
@@ -212,13 +197,13 @@
       const keys = Object.keys(CHAINS) as ChainKey[];
       const blockPairs = await Promise.all(
         keys.map(async (key) => {
-          const [fromBlock, toBlock] = await Promise.all([dateToBlock(key, from), dateToBlock(key, to)]);
-          return { key, fromBlock, toBlock };
+          const toBlock = await dateToBlock(key, to);
+          return { key, toBlock };
         })
       );
       // 체인별 비교 실행
-      await Promise.all(blockPairs.map(({ key, fromBlock, toBlock }) =>
-        compareChainRange(key, fromBlock, toBlock, from, to)
+      await Promise.all(blockPairs.map(({ key, toBlock }) =>
+        compareChainRange(key, toBlock, to)
       ));
     } catch (e) {
       rangeError = e instanceof Error ? e.message : 'Block lookup failed';
@@ -277,30 +262,6 @@
       states[key].loading = false;
       states[key].loadedAt = new Date();
     }
-  }
-
-  function setBaseline(key: ChainKey) {
-    const s = states[key];
-    if (!s.loadedAt) return;
-    states[key].baseline = {
-      factory: s.factory,
-      vault: s.vault,
-      pairs: [...s.pairs],
-      capturedAt: s.loadedAt
-    };
-  }
-
-  function formatTime(d: Date): string {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }
-
-  function formatDuration(from: Date, to: Date): string {
-    const secs = Math.floor((to.getTime() - from.getTime()) / 1000);
-    if (secs < 60) return `${secs}s`;
-    const mins = Math.floor(secs / 60);
-    if (mins < 60) return `${mins}m ${secs % 60}s`;
-    const hours = Math.floor(mins / 60);
-    return `${hours}h ${mins % 60}m`;
   }
 
   // ─── 전체 체인 병렬 로드 ──────────────────────────────────────────────────
@@ -440,9 +401,6 @@
           <span class="chain-name">{config.name}</span>
           <div class="chain-actions">
             {#if states[key as ChainKey].loadedAt && !states[key as ChainKey].loading}
-              <button class="baseline-btn" onclick={() => setBaseline(key as ChainKey)}>
-                📍 Set baseline
-              </button>
               {#if states[key as ChainKey].historyLoading}
                 <span class="history-loading">📈 로딩중…</span>
               {:else}
@@ -459,21 +417,6 @@
           <p class="history-error">{states[key as ChainKey].historyError}</p>
         {/if}
 
-        {#if states[key as ChainKey].baseline}
-          {@const bl = states[key as ChainKey].baseline!}
-          {@const cur = states[key as ChainKey].loadedAt}
-          <div class="period-bar">
-            <span class="period-label">Baseline {formatTime(bl.capturedAt)}</span>
-            {#if cur && cur > bl.capturedAt}
-              <span class="period-arrow">→</span>
-              <span class="period-label">{formatTime(cur)}</span>
-              <span class="period-duration">({formatDuration(bl.capturedAt, cur)})</span>
-            {:else}
-              <span class="period-hint">— Refresh to compare</span>
-            {/if}
-          </div>
-        {/if}
-
         <!-- {#if}: 조건부 렌더링. 조건이 true일 때만 해당 블록을 DOM에 추가. -->
         {#if states[key as ChainKey].loading}
           <p class="state-msg">Loading...</p>
@@ -488,7 +431,7 @@
             <FactoryCard
               chainLabel={config.name}
               data={states[key as ChainKey].factory}
-              prevData={states[key as ChainKey].baseline?.factory ?? null}
+              prevData={null}
               loading={false}
               error={null}
             />
@@ -503,7 +446,7 @@
             )}
             <VaultCard
               data={states[key as ChainKey].vault!}
-              prevData={states[key as ChainKey].baseline?.vault ?? null}
+              prevData={null}
               tokenSymbols={symMap}
             />
           {/if}
@@ -518,9 +461,8 @@
               Pairs ({visible.length} / {states[key as ChainKey].pairs.length})
             </div>
             {#each visible as pair (pair.address)}
-              {@const prevPair = states[key as ChainKey].baseline?.pairs.find(p => p.address === pair.address) ?? null}
               {@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
-              <PairCard data={pair} prevData={prevPair} history={pairHistory} chainLabel={config.name} />
+              <PairCard data={pair} prevData={null} history={pairHistory} chainLabel={config.name} />
             {/each}
           {/if}
         {/if}
@@ -636,29 +578,6 @@
   .chain-col { display: flex; flex-direction: column; gap: 0.75rem; }
   .chain-header { display: flex; align-items: center; justify-content: space-between; }
   .chain-actions { display: flex; align-items: center; gap: 0.4rem; }
-  .baseline-btn {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.6rem;
-    border: 1px solid #a5b4fc;
-    border-radius: 6px;
-    background: #eef2ff;
-    color: #4338ca;
-    cursor: pointer;
-  }
-  .baseline-btn:hover { background: #e0e7ff; }
-  .period-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.72rem;
-    color: #64748b;
-    background: #f1f5f9;
-    border-radius: 6px;
-    padding: 0.35rem 0.6rem;
-  }
-  .period-arrow { color: #94a3b8; }
-  .period-duration { font-weight: 600; color: #475569; }
-  .period-hint { color: #94a3b8; font-style: italic; }
   .chain-name { font-size: 0.85rem; font-weight: 600; color: #475569; }
   .pairs-label {
     font-size: 0.75rem;
