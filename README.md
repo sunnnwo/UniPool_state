@@ -1,7 +1,3 @@
-bash
-
-cat > /home/claude/unipool/README.md << 'README'
-
 # UniPool Parameter Dashboard
 
 A read-only dashboard that fetches and displays all contract parameters from the UniPool protocol across Arbitrum, Base, and BSC in real time. Designed to compare parameters across chains and across individual trading pairs at a glance.
@@ -49,6 +45,12 @@ npm install
 
 ```bash
 cp .env.example .env
+```
+
+### 3. make Html file(/build/dashboard.html)
+
+```bash
+npm run build:html
 ```
 
 Open `.env` and fill in your Alchemy API key:
@@ -143,8 +145,3 @@ Source: https://app.everything.inc/developers
 | **Beacon Proxy**   | An upgradeable contract pattern where the implementation address is stored in a separate Beacon contract rather than in the proxy itself                           |
 | **LP token**       | Liquidity Provider token — an ERC-20 minted to represent a user's share of a liquidity pool                                                                        |
 | **Unix timestamp** | Seconds elapsed since 1 January 1970. Multiply by 1000 to convert to a JavaScript Date                                                                             |
-
-README
-출력
-
-exit code 0
