@@ -47,12 +47,6 @@ npm install
 cp .env.example .env
 ```
 
-### 3. make Html file(/build/dashboard.html)
-
-```bash
-npm run build:html
-```
-
 Open `.env` and fill in your Alchemy API key:
 
 ```bash
@@ -71,6 +65,7 @@ VITE_FACTORY_BSC=0xabD8DC06559634e59F6698c33A5E65e90e917b91
 
 ```bash
 npm run dev
+
 ```
 
 Open `http://localhost:5173` in your browser.
@@ -79,6 +74,12 @@ Open `http://localhost:5173` in your browser.
 
 ```bash
 npm run build
+```
+
+### Make Html file
+
+```bash
+npm run build:html
 ```
 
 ---
