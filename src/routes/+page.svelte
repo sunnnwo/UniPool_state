@@ -1,11 +1,11 @@
 <script lang="ts">
   // ─── +page.svelte ──────────────────────────────────────────────────────────
-  // 이 파일의 역할:
-  //   앱의 메인 페이지. 모든 체인의 데이터 로딩을 조율하고,
-  //   Factory / Vault / Pair 카드를 체인별로 나란히 표시한다.
+  // Role of this file:
+  //   The app's main page. Coordinates data loading for all chains and displays
+  //   Factory / Vault / Pair cards side-by-side per chain.
   //
-  // SvelteKit에서 +page.svelte는 라우트(route = URL 경로)에 대응하는 페이지 컴포넌트다.
-  //   src/routes/+page.svelte → http://localhost:5173/ (루트 경로)
+  // In SvelteKit, +page.svelte is the page component corresponding to a route (URL path).
+  //   src/routes/+page.svelte → http://localhost:5173/ (root path)
   //   src/routes/about/+page.svelte → http://localhost:5173/about
 
   import { CHAINS } from '../config/chains';
@@ -21,7 +21,7 @@
   import VaultCard from '../components/VaultCard.svelte';
   import { sidebarStore } from '$lib/sidebar.svelte';
 
-  // ─── 상태 타입 정의 ────────────────────────────────────────────────────────
+  // ─── State type definition ────────────────────────────────────────────────
   type ChainState = {
     factory: FactoryData | null;
     pairs: PairData[];
@@ -29,25 +29,25 @@
     loading: boolean;
     error: string | null;
     loadedAt: Date | null;
-    // 7일 히스토리: 스파크라인 그래프용
+    // 7-day history: used for sparkline charts
     factoryHistory: FactoryData[];
     pairHistory: Record<string, PairData[]> | null;
     historyLoading: boolean;
     historyError: string | null;
   };
 
-  // ─── $state: Svelte 5 반응형 상태 ─────────────────────────────────────────
-  // Svelte 4: let states = writable({})  (스토어 방식, 더 복잡함)
-  // Svelte 5: let states = $state({})   (rune 방식, 더 직관적)
+  // ─── $state: Svelte 5 reactive state ──────────────────────────────────────
+  // Svelte 4: let states = writable({})  (store pattern, more verbose)
+  // Svelte 5: let states = $state({})   (rune pattern, more intuitive)
   //
-  // $state()로 선언한 변수는 "반응형(reactive)":
-  //   값이 바뀌면 Svelte가 자동으로 해당 변수를 사용하는 UI를 다시 렌더링한다.
-  //   states[key].loading = true → 로딩 스피너 즉시 표시
-  //   states[key].factory = data → 카드 즉시 표시
+  // Variables declared with $state() are "reactive":
+  //   When the value changes, Svelte automatically re-renders any UI using that variable.
+  //   states[key].loading = true → loading spinner shown immediately
+  //   states[key].factory = data → card shown immediately
   //
   // Record<ChainKey, ChainState>:
-  //   Record<K, V> = { [key in K]: V } 타입.
-  //   "arbitrum", "base", "bsc" 키에 대해 ChainState 값을 갖는 객체 타입.
+  //   Record<K, V> = { [key in K]: V } type.
+  //   Object type with keys "arbitrum", "base", "bsc" and ChainState values.
   //
   // Object.fromEntries(Object.keys(CHAINS).map(...)):
   //   Object.keys(CHAINS)     → ["arbitrum", "base", "bsc"]
@@ -55,41 +55,41 @@
   //   Object.fromEntries(...)  → { arbitrum: {...}, base: {...}, bsc: {...} }
   //
   // as unknown as Record<ChainKey, ChainState>:
-  //   Object.fromEntries의 반환 타입이 { [k: string]: ... }라서
-  //   "arbitrum" | "base" | "bsc" 키를 가진 타입으로 직접 캐스팅(casting)이 안 된다.
-  //   캐스팅 = 컴파일러에게 "이 값의 타입은 이것이다"라고 강제로 알려주는 것.
-  //   unknown을 경유하면 어떤 타입으로든 캐스팅 가능.
+  //   Object.fromEntries returns { [k: string]: ... }, which cannot be directly
+  //   cast to a type with keys "arbitrum" | "base" | "bsc".
+  //   Casting = telling the compiler "treat this value as this type".
+  //   Routing through unknown allows casting to any type.
   let states = $state<Record<ChainKey, ChainState>>(
     Object.fromEntries(
       Object.keys(CHAINS).map((k) => [k, { factory: null, pairs: [], vault: null, loading: false, error: null, loadedAt: null, factoryHistory: [], pairHistory: null, historyLoading: false, historyError: null }])
     ) as unknown as Record<ChainKey, ChainState>
   );
 
-  // ─── 검색 상태 ────────────────────────────────────────────────────────────
-  // $state(''): 빈 문자열로 초기화된 반응형 변수.
-  // input에 bind:value={searchQuery}를 연결하면
-  // 사용자가 타이핑할 때마다 이 값이 자동으로 업데이트된다.
+  // ─── Search state ──────────────────────────────────────────────────────────
+  // $state(''): reactive variable initialised to an empty string.
+  // Connecting bind:value={searchQuery} to an input means
+  // this value updates automatically as the user types.
   let searchQuery = $state('');
 
-  // ─── 검색어 정규화 ────────────────────────────────────────────────────────
-  // $derived: searchQuery가 바뀔 때마다 자동으로 재계산되는 파생 값.
+  // ─── Search query normalisation ──────────────────────────────────────────
+  // $derived: a derived value that auto-recalculates whenever searchQuery changes.
   //
-  // 왜 일반 함수(function filterPairs)를 쓰면 안 되는가?
-  //   Svelte 5에서 일반 함수는 반응형이 아니다.
-  //   searchQuery가 바뀌어도 함수가 반환한 값이 재계산되지 않는다.
-  //   따라서 템플릿의 {@const filtered = filterPairs(...)}가 업데이트되지 않는다.
+  // Why not use a plain function (function filterPairs)?
+  //   In Svelte 5 a plain function is not reactive.
+  //   When searchQuery changes the function's return value is not recalculated.
+  //   Therefore {@const filtered = filterPairs(...)} in the template would not update.
   //
-  // $derived를 쓰면:
-  //   searchQuery($state)가 바뀌는 순간 Svelte가 이 값을 자동으로 다시 계산한다.
-  //   → 검색어 입력 즉시 필터링 결과가 반영된다.
+  // With $derived:
+  //   The moment searchQuery ($state) changes, Svelte automatically recomputes this value.
+  //   → Filtering results update instantly as the user types.
   //
-  // .trim(): 앞뒤 공백 제거
-  // .toLowerCase(): 대소문자 무시
+  // .trim(): removes leading and trailing whitespace
+  // .toLowerCase(): makes the comparison case-insensitive
   const normalizedQuery = $derived(searchQuery.trim().toLowerCase());
 
-  // filterPairs: 정규화된 검색어로 Pair 배열을 필터링하는 함수.
-  // normalizedQuery($derived)를 참조하므로 검색어가 바뀌면 함수 호출 결과도 바뀐다.
-  // chain-level 주소(factory, vault, fee collector 등)가 query와 일치하는지 확인
+  // filterPairs: filters the Pair array using the normalised search query.
+  // References normalizedQuery ($derived), so when the query changes the filter result also changes.
+  // Checks whether chain-level addresses (factory, vault, fee collector, etc.) match the query
   function matchesChainAddrs(query: string, chainFactoryAddr: string, factory: FactoryData | null, vault: VaultData | null): boolean {
     const addrs: (string | undefined)[] = [
       chainFactoryAddr,
@@ -124,7 +124,7 @@
     );
   }
 
-  // 체인에 query와 매칭되는 항목이 하나라도 있는지 확인 (factory/vault 카드 표시 여부 결정)
+  // Checks whether the chain has at least one item matching the query (determines whether factory/vault cards are shown)
   function chainHasMatch(chainFactoryAddr: string, factory: FactoryData | null, vault: VaultData | null, pairs: PairData[]): boolean {
     if (!normalizedQuery) return true;
     if (matchesChainAddrs(normalizedQuery, chainFactoryAddr, factory, vault)) return true;
@@ -140,7 +140,7 @@
     );
   }
 
-  // ─── DeFiLlama 날짜→블록 변환 ──────────────────────────────────────────────
+  // ─── DeFiLlama date → block conversion ──────────────────────────────────
   const DEFILLAMA_SLUG: Record<ChainKey, string> = {
     arbitrum: 'arbitrum',
     base: 'base',
@@ -155,7 +155,7 @@
     return BigInt(json.height);
   }
 
-  // ─── 날짜 범위 비교 상태 ─────────────────────────────────────────────────
+  // ─── Date range comparison state ────────────────────────────────────────
   let fromDate = $state('');
   let toDate = $state('');
   let rangeError = $state<string | null>(null);
@@ -166,7 +166,7 @@
     states[key].error = null;
 
     try {
-      // 종료 블록 데이터 → current
+      // end-block data → current
       const toFactory = await fetchFactoryData(config, toBlock);
       const toPairs = await fetchAllPairs(config, config.factory, toFactory.allPairsLength, toBlock);
       const toTokens = [...new Set(toPairs.flatMap((p) => [p.token0, p.token1]))] as `0x${string}`[];
@@ -187,13 +187,13 @@
 
   async function compareAllRange() {
     rangeError = null;
-    if (!fromDate || !toDate) { rangeError = '시작일과 종료일을 모두 입력해주세요.'; return; }
+    if (!fromDate || !toDate) { rangeError = 'Please enter both a start date and an end date.'; return; }
     const from = new Date(fromDate);
     const to = new Date(toDate);
-    if (from >= to) { rangeError = '시작일은 종료일보다 앞이어야 합니다.'; return; }
+    if (from >= to) { rangeError = 'Start date must be earlier than end date.'; return; }
 
     try {
-      // 모든 체인의 블록 번호를 병렬로 조회
+      // fetch block numbers for all chains in parallel
       const keys = Object.keys(CHAINS) as ChainKey[];
       const blockPairs = await Promise.all(
         keys.map(async (key) => {
@@ -201,7 +201,7 @@
           return { key, toBlock };
         })
       );
-      // 체인별 비교 실행
+      // run comparison per chain
       await Promise.all(blockPairs.map(({ key, toBlock }) =>
         compareChainRange(key, toBlock, to)
       ));
@@ -210,47 +210,47 @@
     }
   }
 
-  // ─── 단일 체인 로드 함수 ─────────────────────────────────────────────────
-  // async: 내부에서 await를 써서 비동기 작업을 순서대로 실행.
+  // ─── Single chain load function ──────────────────────────────────────────
+  // async: uses await internally to execute async operations sequentially.
   async function loadChain(key: ChainKey) {
     const config = CHAINS[key];
 
-    // 로딩 시작: Svelte가 loading=true를 감지해서 "Loading..." 메시지 표시
+    // start loading: Svelte detects loading=true and shows the "Loading..." message
     states[key].loading = true;
     states[key].error = null;
 
     // try/catch/finally:
-    //   try:     성공 경로. 에러 없으면 여기만 실행.
-    //   catch:   에러 발생 시 실행. e = 발생한 에러 객체.
-    //   finally: 성공/실패 관계없이 항상 실행. 로딩 종료에 씀.
+    //   try:     success path. Runs only if no error occurs.
+    //   catch:   runs when an error is thrown. e = the error object.
+    //   finally: always runs regardless of success or failure. Used to end loading.
     try {
-      // 1단계: Factory 데이터
-      // await: 이 Promise가 완료될 때까지 기다린다.
-      //        기다리는 동안 브라우저는 다른 작업(UI 업데이트 등)을 계속할 수 있다.
+      // Step 1: Factory data
+      // await: waits until this Promise resolves.
+      //        While waiting, the browser can continue other work (UI updates, etc.).
       const factory = await fetchFactoryData(config);
-      states[key].factory = factory;  // 즉시 UI에 Factory 카드 표시
+      states[key].factory = factory;  // show Factory card in UI immediately
       sidebarStore.setFactory(key, config.name, config.factory);
 
-      // 2단계: Pair 목록
-      // factory.allPairsLength를 재사용 → Factory를 다시 호출하지 않아도 됨
+      // Step 2: Pair list
+      // reuses factory.allPairsLength → no need to call Factory again
       const pairs = await fetchAllPairs(config, config.factory, factory.allPairsLength);
-      states[key].pairs = pairs;  // 즉시 UI에 Pair 카드들 표시
+      states[key].pairs = pairs;  // show Pair cards in UI immediately
       sidebarStore.setPairsForChain(key, config.name, pairs);
 
-      // 3단계: Vault
-      // pairs에서 token0, token1 주소를 모두 추출 → 중복 제거 → Vault에 한 번만 조회
+      // Step 3: Vault
+      // extract all token0/token1 addresses from pairs → deduplicate → query Vault only once
       //
       // .flatMap((p) => [p.token0, p.token1]):
-      //   각 Pair에서 두 토큰 주소를 꺼내 하나의 배열로 펼침.
-      //   예) 2개 Pair → ["0xWETH", "0xUSDT", "0xWETH", "0xDAI"]
+      //   extracts both token addresses from each Pair into a single flat array.
+      //   e.g. 2 Pairs → ["0xWETH", "0xUSDT", "0xWETH", "0xDAI"]
       //
       // new Set(allTokens):
-      //   Set = 중복을 허용하지 않는 집합 자료구조.
-      //   같은 주소가 여러 Pair에 있어도 한 번만 조회하도록 중복 제거.
+      //   Set = a data structure that does not allow duplicates.
+      //   Even if the same address appears in multiple Pairs, it is queried only once.
       //   → ["0xWETH", "0xUSDT", "0xDAI"]
       //
       // [...new Set(allTokens)]:
-      //   Set을 다시 배열로 변환 (spread 연산자).
+      //   converts the Set back to an array (spread operator).
       const allTokens = pairs.flatMap((p) => [p.token0, p.token1]);
       const uniqueTokens = [...new Set(allTokens)] as `0x${string}`[];
       const vault = await fetchVaultData(config, factory.vault, uniqueTokens);
@@ -264,29 +264,28 @@
     }
   }
 
-  // ─── 전체 체인 병렬 로드 ──────────────────────────────────────────────────
-  // Promise.all: 3개 체인을 동시에 로드.
-  //   순차: 체인1 완료 → 체인2 완료 → 체인3 완료 (느림)
-  //   병렬: 체인1, 체인2, 체인3 동시 시작 → 가장 느린 것 기다림 (빠름)
+  // ─── Load all chains in parallel ──────────────────────────────────────────
+  // Promise.all: loads all 3 chains concurrently.
+  //   Sequential: chain1 done → chain2 done → chain3 done (slow)
+  //   Parallel:   chain1, chain2, chain3 start simultaneously → wait for the slowest (fast)
   //
   // (Object.keys(CHAINS) as ChainKey[]):
-  //   Object.keys는 string[]을 반환하지만
-  //   우리는 ChainKey("arbitrum"|"base"|"bsc") 타입이 필요하므로 캐스팅.
+  //   Object.keys returns string[], but we need ChainKey ("arbitrum"|"base"|"bsc") type → cast.
   function loadAll() {
     return Promise.all((Object.keys(CHAINS) as ChainKey[]).map(loadChain));
   }
 
-  // ─── 7일 히스토리 로드 ────────────────────────────────────────────────────
-  // 오늘부터 6일 전 UTC 자정 ~ 오늘 UTC 자정까지 7개 시점의 데이터를 수집한다.
-  // 각 시점의 블록 번호를 DeFiLlama API로 조회 후, 해당 블록의 Factory/Pair를 fetch.
+  // ─── Load 7-day history ───────────────────────────────────────────────────
+  // Collects data at 7 points in time: UTC midnight 6 days ago through today's UTC midnight.
+  // Looks up the block number at each point via the DeFiLlama API, then fetches Factory/Pair at that block.
   //
-  // 아카이브 노드(archive node)가 필요한 이유:
-  //   일반 RPC 노드는 최신 블록 상태만 저장.
-  //   과거 블록의 스마트컨트랙트 상태를 조회하려면 아카이브 노드가 필요.
-  //   아카이브 노드 없이 과거 블록을 조회하면 RPC 에러 발생.
+  // Why an archive node is required:
+  //   A standard RPC node only stores the latest block state.
+  //   Querying smart contract state at a past block requires an archive node.
+  //   Querying past blocks without an archive node results in an RPC error.
   async function loadHistory(key: ChainKey) {
     if (!states[key].factory) {
-      states[key].historyError = '먼저 현재 데이터를 로드해주세요.';
+      states[key].historyError = 'Please load current data first.';
       return;
     }
     states[key].historyLoading = true;
@@ -295,22 +294,22 @@
     try {
       const config = CHAINS[key];
 
-      // 오늘부터 6일 전까지 UTC 자정 기준 7개 날짜 생성
-      // i=0 → 6일 전, i=6 → 오늘 (오래된 순서대로 정렬 → 스파크라인 왼쪽=과거)
+      // generate 7 dates from 6 days ago to today, each at UTC midnight
+      // i=0 → 6 days ago, i=6 → today (sorted oldest first → sparkline left=past)
       //
-      // Date.now() % 86_400_000: 오늘 UTC 자정 이후 경과 밀리초.
-      // now - (now % 86_400_000): UTC 자정 타임스탬프 (뮤터블 Date 객체 생성 없이 계산)
+      // Date.now() % 86_400_000: milliseconds elapsed since today's UTC midnight.
+      // now - (now % 86_400_000): UTC midnight timestamp (computed without creating a mutable Date object)
       const nowMs = Date.now();
       const todayMidnightMs = nowMs - (nowMs % 86_400_000);
       const dates = Array.from({ length: 7 }, (_, i) =>
         new Date(todayMidnightMs - (6 - i) * 86_400_000)
       );
 
-      // DeFiLlama API로 각 날짜에 해당하는 블록 번호 조회 (병렬)
+      // look up the block number for each date via the DeFiLlama API (in parallel)
       const blocks = await Promise.all(dates.map((d) => dateToBlock(key, d)));
 
-      // 각 블록 시점의 Factory + Pair 데이터를 순차 fetch
-      // 병렬로 하면 RPC에 부하가 과다할 수 있어 순차 처리
+      // fetch Factory + Pair data at each block point sequentially
+      // parallel fetching could overload the RPC, so sequential processing is used
       const snapshots: { factory: FactoryData; pairs: PairData[] }[] = [];
       for (const block of blocks) {
         const factory = await fetchFactoryData(config, block);
@@ -318,10 +317,10 @@
         snapshots.push({ factory, pairs });
       }
 
-      // Factory 히스토리: 날짜 순서대로 7개
+      // Factory history: 7 entries in chronological order
       states[key].factoryHistory = snapshots.map((s) => s.factory);
 
-      // Pair 히스토리: 주소별로 그룹화
+      // Pair history: grouped by address
       // byAddr["0xPairAddr"] = [day0Data, day1Data, ..., day6Data]
       const byAddr: Record<string, PairData[]> = {};
       for (const { pairs } of snapshots) {
@@ -333,11 +332,11 @@
       states[key].pairHistory = byAddr;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
-      // 아카이브 노드 관련 에러 친화적 메시지
+      // user-friendly error message for archive node issues
       if (msg.toLowerCase().includes('block') || msg.toLowerCase().includes('missing') || msg.toLowerCase().includes('archive')) {
-        states[key].historyError = `히스토리 조회 실패: 아카이브 노드가 필요합니다. (${msg})`;
+        states[key].historyError = `History fetch failed: an archive node is required. (${msg})`;
       } else {
-        states[key].historyError = `히스토리 조회 실패: ${msg}`;
+        states[key].historyError = `History fetch failed: ${msg}`;
       }
     } finally {
       states[key].historyLoading = false;
@@ -345,24 +344,24 @@
   }
 </script>
 
-<!-- ─── 마크업(HTML 템플릿) ────────────────────────────────────────────────── -->
+<!-- ─── Markup (HTML template) ───────────────────────────────────────────── -->
 <main>
   <header>
     <h1>UniPool — Parameter Dashboard</h1>
-    <!-- onclick={loadAll}: 버튼 클릭 시 loadAll 함수 호출 -->
+    <!-- onclick={loadAll}: calls loadAll when the button is clicked -->
     <button onclick={loadAll}>Load all chains</button>
   </header>
 
-  <!-- 날짜 범위 비교 -->
+  <!-- Date range comparison -->
   <div class="range-bar">
-    <span class="range-label">기간 비교</span>
+    <span class="range-label">Date Comparison</span>
     <label class="range-input">
-      <span>시작</span>
+      <span>From</span>
       <input type="datetime-local" bind:value={fromDate} />
     </label>
     <span class="range-arrow">→</span>
     <label class="range-input">
-      <span>종료</span>
+      <span>To</span>
       <input type="datetime-local" bind:value={toDate} />
     </label>
     <button class="compare-btn" onclick={compareAllRange}>Compare</button>
@@ -371,30 +370,30 @@
     {/if}
   </div>
 
-  <!-- 검색창 -->
+  <!-- Search bar -->
   <div class="search-bar">
     <!-- bind:value={searchQuery}:
-         양방향 바인딩(two-way binding).
-         input 값이 바뀌면 searchQuery가 업데이트되고,
-         searchQuery가 바뀌면 input 값도 업데이트된다. -->
+         two-way binding.
+         When the input value changes, searchQuery is updated;
+         when searchQuery changes, the input value is also updated. -->
     <input
       type="text"
       placeholder="Search pairs by symbol, name, or address..."
       bind:value={searchQuery}
     />
-    <!-- {#if searchQuery}: searchQuery가 빈 문자열이 아닐 때만 표시 -->
+    <!-- {#if searchQuery}: shown only when searchQuery is not an empty string -->
     {#if searchQuery}
-      <!-- () => (searchQuery = ''): 클릭 시 검색어 초기화 -->
+      <!-- () => (searchQuery = ''): clears the search query on click -->
       <button class="clear-btn" onclick={() => (searchQuery = '')}>✕</button>
     {/if}
   </div>
 
-  <!-- 체인별 컬럼 그리드 -->
+  <!-- Per-chain column grid -->
   <div class="chains">
     <!-- {#each Object.entries(CHAINS) as [key, config] (key)}:
-         CHAINS를 [key, value] 쌍으로 순회.
-         (key) = 각 항목의 고유 식별자. Svelte가 리스트를 효율적으로 업데이트하는데 씀.
-         key가 없으면 항목이 바뀔 때 모든 DOM을 다시 생성 → 비효율. -->
+         iterates CHAINS as [key, value] pairs.
+         (key) = unique identifier for each item; used by Svelte to update the list efficiently.
+         without a key, all DOM nodes are recreated when an item changes → inefficient. -->
     {#each Object.entries(CHAINS) as [key, config] (key)}
       <div class="chain-col">
         <div class="chain-header">
@@ -402,7 +401,7 @@
           <div class="chain-actions">
             {#if states[key as ChainKey].loadedAt && !states[key as ChainKey].loading}
               {#if states[key as ChainKey].historyLoading}
-                <span class="history-loading">📈 로딩중…</span>
+                <span class="history-loading">📈 Loading…</span>
               {:else}
                 <button class="history-btn" onclick={() => loadHistory(key as ChainKey)}>
                   📈 7d
@@ -417,7 +416,7 @@
           <p class="history-error">{states[key as ChainKey].historyError}</p>
         {/if}
 
-        <!-- {#if}: 조건부 렌더링. 조건이 true일 때만 해당 블록을 DOM에 추가. -->
+        <!-- {#if}: conditional rendering. Adds the block to the DOM only when condition is true. -->
         {#if states[key as ChainKey].loading}
           <p class="state-msg">Loading...</p>
 
@@ -451,7 +450,7 @@
             />
           {/if}
 
-          <!-- Pair 카드 목록 -->
+          <!-- Pair card list -->
           {#if (!anySelected || sidebarStore.selectedCount > 0) && states[key as ChainKey].pairs.length > 0}
             {@const filtered = filterPairs(states[key as ChainKey].pairs, config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault)}
             {@const visible = sidebarStore.selectedCount > 0
@@ -474,7 +473,7 @@
 <style>
   main {
     max-width: 1400px;
-    margin: 0 auto;       /* 가운데 정렬 */
+    margin: 0 auto;       /* center horizontally */
     padding: 2rem 1rem;
     font-family: system-ui, sans-serif;
   }
@@ -546,7 +545,7 @@
     border-radius: 8px;
     font-size: 0.85rem;
     background: #f8fafc;
-    box-sizing: border-box;  /* padding이 width 안에 포함되도록 */
+    box-sizing: border-box;  /* include padding within width */
   }
   .search-bar input:focus {
     outline: none;
@@ -554,10 +553,10 @@
     background: #fff;
   }
   .clear-btn {
-    position: absolute;    /* search-bar 기준으로 절대 위치 */
+    position: absolute;    /* positioned relative to search-bar */
     right: 0.5rem;
     top: 50%;
-    transform: translateY(-50%);  /* 세로 중앙 정렬 */
+    transform: translateY(-50%);  /* vertical center */
     border: none;
     background: transparent;
     cursor: pointer;
@@ -569,11 +568,11 @@
 
   .chains {
     display: grid;
-    /* auto-fit: 공간에 맞게 컬럼 수 자동 조정
-       minmax(320px, 1fr): 최소 320px, 최대 가용 공간 균등 분배 */
+    /* auto-fit: auto-adjust column count to available space
+       minmax(320px, 1fr): minimum 320px, maximum equal share of available space */
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 1.5rem;
-    align-items: start;   /* 각 컬럼이 내용에 맞게 높이 조정 (stretch 대신) */
+    align-items: start;   /* each column sizes to its content (instead of stretch) */
   }
   .chain-col { display: flex; flex-direction: column; gap: 0.75rem; }
   .chain-header { display: flex; align-items: center; justify-content: space-between; }

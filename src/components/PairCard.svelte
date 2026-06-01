@@ -1,28 +1,29 @@
 <script lang="ts">
-	// ─── PairCard.svelte — Pair(유동성 풀) 컨트랙트 데이터 표시 컴포넌트 ────
+	// ─── PairCard.svelte — Pair (liquidity pool) contract data display component
 	//
-	// 이 컴포넌트는 PairData 하나를 받아 카드 형태로 보여준다.
-	// 날짜 비교 기능 사용 시 prevData도 받아 모든 수치 변화를 diff 배지로 표시.
+	// Receives a single PairData and renders it as a card.
+	// When date comparison is active, prevData is also received and all numeric
+	// changes are shown with diff badges.
 	//
-	// diff 배지: 값이 올랐으면 ▲ 초록, 내렸으면 ▼ 빨강으로 표시.
-	// nd() = number diff (bps 단위 숫자), bd() = bigint diff (큰 정수)
+	// Diff badge: ▲ green for increases, ▼ red for decreases.
+	// nd() = number diff (bps integers), bd() = bigint diff (large integers)
 
 	import type { PairData } from '../config/fetchpairs';
 	import { bpsToPercent, formatTimestamp, formatAmount } from '../config/fetchpairs';
 	import Sparkline from './Sparkline.svelte';
 	import { CHAINS } from '../config/chains';
 
-	// factory 주소(소문자) → 체인 이름 역매핑.
-	// 예) "0xa882...b6a7" → "Arbitrum One"
-	// 체인 config에 등록된 factory 주소만 인식하고, 나머지는 단축 주소로 표시.
+	// Reverse mapping: factory address (lowercase) → chain name.
+	// e.g. "0xa882...b6a7" → "Arbitrum One"
+	// Recognises only factory addresses registered in the chain config; others shown as shortened addresses.
 	const FACTORY_NAME: Record<string, string> = Object.fromEntries(
 		Object.values(CHAINS).map((c) => [c.factory.toLowerCase(), c.name])
 	);
 
-	// $props(): 부모 컴포넌트에서 전달받는 값.
-	// data: 현재(또는 종료일) 시점의 Pair 데이터
-	// prevData: 비교 기준(시작일) 시점의 Pair 데이터 (없으면 diff 배지 미표시)
-	// history: 과거 7일 스냅샷 배열 (오래된 것 먼저). 스파크라인 표시에 사용.
+	// $props(): values passed in from the parent component.
+	// data: Pair data at the current (or end date) snapshot
+	// prevData: Pair data at the comparison (start date) snapshot (diff badges hidden if null)
+	// history: array of past 7-day snapshots (oldest first), used for sparkline display.
 	let {
 		data,
 		prevData = null,
@@ -30,19 +31,19 @@
 		chainLabel = ''
 	}: { data: PairData; prevData?: PairData | null; history?: PairData[]; chainLabel?: string } = $props();
 
-	// bps(베이시스 포인트) 숫자 두 값의 차이를 diff 배지 정보로 반환.
-	// 예) nd(330, 300) → { label: "▲ +30 bps", dir: "up" }
-	//     nd(270, 300) → { label: "▼ -30 bps", dir: "down" }
-	//     nd(300, 300) → null (변화 없음, 배지 미표시)
+	// Returns diff badge info for two bps (basis point) numbers.
+	// e.g. nd(330, 300) → { label: "▲ +30 bps", dir: "up" }
+	//      nd(270, 300) → { label: "▼ -30 bps", dir: "down" }
+	//      nd(300, 300) → null (no change, badge hidden)
 	function nd(curr: number, prev: number): { label: string; dir: 'up' | 'down' } | null {
 		if (curr === prev) return null;
 		const d = curr - prev;
 		return { label: d > 0 ? `▲ +${d} bps` : `▼ ${d} bps`, dir: d > 0 ? 'up' : 'down' };
 	}
 
-	// bigint diff — decimals를 넘기면 formatAmount로 읽기 쉬운 소수로 표시.
-	// reserve, totalSupply, totalBorrowed 등 큰 정수값(uint256)에 사용.
-	// bigint 절댓값: d < 0n ? -d : d  (Math.abs는 bigint 미지원)
+	// bigint diff — pass decimals to display via formatAmount as a human-readable decimal.
+	// Used for large integer values (uint256) like reserve, totalSupply, totalBorrowed, etc.
+	// bigint absolute value: d < 0n ? -d : d  (Math.abs does not support bigint)
 	function bd(curr: bigint, prev: bigint, decimals?: number): { label: string; dir: 'up' | 'down' } | null {
 		if (curr === prev) return null;
 		const d = curr - prev;
@@ -51,9 +52,9 @@
 		return { label: d > 0n ? `▲ +${fmt}` : `▼ -${fmt}`, dir: d > 0n ? 'up' : 'down' };
 	}
 
-	// RAY 단위(10^27) bigint diff.
-	// isRate=true  → 이자율(%) 표시  예) "▲ +0.0300%"
-	// isRate=false → 배율(×) 표시   예) "▲ +0.000035×"
+	// RAY unit (10^27) bigint diff.
+	// isRate=true  → interest rate (%) display  e.g. "▲ +0.0300%"
+	// isRate=false → multiplier (×) display      e.g. "▲ +0.000035×"
 	function rd(curr: bigint, prev: bigint, isRate = false): { label: string; dir: 'up' | 'down' } | null {
 		if (curr === prev) return null;
 		const d = curr - prev;
@@ -62,37 +63,37 @@
 		return { label: d > 0n ? `▲ +${fmt}` : `▼ -${fmt}`, dir: d > 0n ? 'up' : 'down' };
 	}
 
-	// ─── 스파크라인 호버 상태 ─────────────────────────────────────────────────
-	// hoveredField: 현재 마우스가 올라간 행의 키 (예: 'reserve0'). null이면 숨김.
-	// sparkVals: history 배열에서 추출한 해당 필드의 시계열 숫자 배열.
-	// sparkTitle: 툴팁에 표시할 레이블.
-	// tipX/tipY: 툴팁의 화면 위치 (position: fixed 기준).
+	// ─── Sparkline hover state ────────────────────────────────────────────────
+	// hoveredField: key of the currently hovered row (e.g. 'reserve0'). null = hidden.
+	// sparkVals: time-series number array extracted from history for the hovered field.
+	// sparkTitle: label shown in the tooltip.
+	// tipX/tipY: tooltip position on screen (position: fixed).
 	let hoveredField = $state<string | null>(null);
 	let sparkVals = $state<number[]>([]);
 	let sparkTitle = $state('');
 	let tipX = $state(0);
 	let tipY = $state(0);
 
-	// history 배열의 날짜 레이블. "6일 전" → "오늘".
-	// 첫 번째와 마지막만 툴팁에 표시.
+	// Date labels for the history array. "6d ago" → "today".
+	// Only first and last are shown in the tooltip.
 	const SPARK_LABELS = ['6d ago', '5d ago', '4d ago', '3d ago', '2d ago', '1d ago', 'today'];
 
-	// 마우스가 스파크라인 지원 행에 진입할 때 호출.
-	// getter: PairData → number 함수. history 각 스냅샷에서 해당 필드 값을 추출.
+	// Called when the mouse enters a sparkline-enabled row.
+	// getter: PairData → number function. Extracts the field value from each history snapshot.
 	function enterSpark(
 		field: string,
 		title: string,
 		getter: (p: PairData) => number,
 		e: MouseEvent
 	) {
-		if (history.length < 2) return; // 데이터 부족 시 무시
+		if (history.length < 2) return; // ignore if insufficient data
 		hoveredField = field;
 		sparkTitle = title;
 		sparkVals = history.map(getter);
 		moveTip(e);
 	}
 
-	// 툴팁 위치 갱신. 커서 오른쪽 아래에 표시하되 화면 바깥으로 나가지 않도록.
+	// Updates tooltip position. Positioned below-right of cursor without going off-screen.
 	function moveTip(e: MouseEvent) {
 		tipX = Math.min(e.clientX + 14, window.innerWidth - 210);
 		tipY = Math.min(e.clientY + 14, window.innerHeight - 140);
@@ -102,19 +103,19 @@
 		hoveredField = null;
 	}
 
-	// 스파크라인 툴팁 레이블 접미어 계산.
-	// $derived: data.token0Symbol이 바뀔 때 자동 재계산.
+	// Computes sparkline tooltip label suffixes.
+	// $derived: auto-recalculates when data.token0Symbol changes.
 	const t0 = $derived(data.token0Symbol ? ` (${data.token0Symbol})` : '');
 	const t1 = $derived(data.token1Symbol ? ` (${data.token1Symbol})` : '');
 	const factoryLabel = $derived(FACTORY_NAME[data.factory.toLowerCase()] ?? shortenAddress(data.factory));
 
-	// 함수명 툴팁 상태 (dt[data-fn] 위에 마우스 올릴 때 표시)
+	// Function name tooltip state (shown when mouse hovers over dt[data-fn])
 	let dtTipText = $state('');
 	let dtTipX = $state(0);
 	let dtTipY = $state(0);
 	let dtTipVisible = $state(false);
 
-	// $state: 복사 피드백 상태. 어떤 버튼이 최근에 눌렸는지 키를 저장.
+	// $state: copy feedback state. Stores the key of the most recently clicked button.
 	let copied = $state<string | null>(null);
 
 	function shortenAddress(addr: string | undefined): string {
@@ -128,25 +129,25 @@
 		setTimeout(() => (copied = null), 1000);
 	}
 
-	// 카드 전체 데이터를 화면 표시 형태와 동일하게 변환해 JSON으로 복사.
-	// bigint → .toString() 변환 (JSON.stringify는 bigint 직접 처리 불가)
-	// bps → bpsToPercent() 변환 (예: 30 → "0.30%")
-	// RAY 단위(10^27) → / 1e27 로 변환해 사람이 읽기 쉬운 소수로 표시
+	// Copies the full card data as JSON in the same format shown on screen.
+	// bigint → .toString() (JSON.stringify cannot handle bigint directly)
+	// bps → bpsToPercent() (e.g. 30 → "0.30%")
+	// RAY units (10^27) → divide by 1e27 for human-readable decimals
 	function copyAll() {
 		const readable = {
 			address: data.address,
 			name: data.name,
 			symbol: data.symbol,
 			decimals: data.decimals,
-			// totalSupply: LP 토큰 총 발행량. formatAmount로 decimals 적용해 표시.
+			// totalSupply: total LP token supply, displayed with decimals via formatAmount.
 			totalSupply: formatAmount(data.totalSupply, data.decimals),
 			token0: data.token0,
 			token1: data.token1,
 			factory: data.factory,
-			// reserve: 풀이 실제 보유한 토큰 수량. 각 토큰 고유 decimals 적용.
+			// reserve: actual token quantity held by the pool, formatted with each token's decimals.
 			reserve0: formatAmount(data.reserve0, data.token0Decimals),
 			reserve1: formatAmount(data.reserve1, data.token1Decimals),
-			// virtualReserves: 가격 계산에만 쓰는 가상 보유량 (In = 살 때, Out = 팔 때)
+			// virtualReserves: virtual quantities used only for price calculation (In = buy side, Out = sell side)
 			virtualReserves: {
 				virtualReserve0In: formatAmount(data.virtualReserves.virtualReserve0In, data.token0Decimals),
 				virtualReserve0Out: formatAmount(data.virtualReserves.virtualReserve0Out, data.token0Decimals),
@@ -179,14 +180,14 @@
 					interestRateAddBps: bpsToPercent(data.interestParams.token1.interestRateAddBps)
 				}
 			},
-			// RAY 단위(10^27) → 1e27로 나눠서 사람이 읽을 수 있는 소수로 변환.
-			// interestMultiplier: 이자 누적 배율. 예) 1.000050 → 0.005% 이자 누적.
+			// RAY units (10^27) → divide by 1e27 for human-readable decimals.
+			// interestMultiplier: cumulative interest multiplier. e.g. 1.000050 → 0.005% interest accumulated.
 			interestMultiplier0: (Number(data.interestMultiplier0) / 1e27).toFixed(6),
 			interestMultiplier1: (Number(data.interestMultiplier1) / 1e27).toFixed(6),
-			// variableInterestRate: 현재 변동 이자율. / 1e27 * 100 → 퍼센트 변환.
+			// variableInterestRate: current variable interest rate. / 1e27 * 100 → percent.
 			variableInterestRate0: ((Number(data.variableInterestRate0) / 1e27) * 100).toFixed(4) + '%',
 			variableInterestRate1: ((Number(data.variableInterestRate1) / 1e27) * 100).toFixed(4) + '%',
-			// lastYieldAccumulator: 마지막 업데이트 시점의 수익 누산기 값 (RAY 단위).
+			// lastYieldAccumulator: yield accumulator value at last on-chain update (in RAY units).
 			lastYieldAccumulator: {
 				yieldAcc0: (Number(data.lastYieldAccumulator.yieldAcc0) / 1e27).toFixed(6),
 				yieldAcc1: (Number(data.lastYieldAccumulator.yieldAcc1) / 1e27).toFixed(6)
@@ -356,8 +357,8 @@
 	</section>
 
 	<section>
-		<!-- 토큰별 IRM은 독립적으로 설정 가능 (예: 스테이블코인 vs 변동성 자산에 다른 이자 곡선).
-		     값이 같더라도 별도 파라미터이므로 컬럼으로 나란히 표시해 비교가 쉽게 함. -->
+		<!-- Each token's IRM can be configured independently (e.g. different curves for stablecoins vs volatile assets).
+		     Even when values are the same they are separate parameters, so display side-by-side for easy comparison. -->
 		<div class="irm-header">
 			<h4>Interest Rate Model</h4>
 			<div class="irm-col-labels">
@@ -569,7 +570,7 @@
 	<div class="fn-tip" style="left:{dtTipX}px;top:{dtTipY}px">{dtTipText}</div>
 {/if}
 
-<!-- 스파크라인 툴팁: position:fixed로 마우스 커서 근처에 표시 -->
+<!-- Sparkline tooltip: position:fixed, displayed near the mouse cursor -->
 {#if hoveredField && sparkVals.length >= 2}
 	<div class="spark-tip" style="left:{tipX}px;top:{tipY}px">
 		<div class="spark-tip-title">{sparkTitle}</div>
@@ -699,7 +700,7 @@
 		padding: 0 4px;
 	}
 
-	/* ─── Interest Rate Model 2-컬럼 레이아웃 ───────────────────────────── */
+	/* ─── Interest Rate Model 2-column layout ───────────────────────────── */
 	.irm-header {
 		display: flex;
 		align-items: center;
@@ -726,7 +727,7 @@
 		gap: 2px;
 	}
 
-	/* ─── 함수명 툴팁 ─────────────────────────────────────────────────────── */
+	/* ─── function name tooltip ─────────────────────────────────────────── */
 	:global(.fn-tip) {
 		position: fixed;
 		z-index: 9998;
@@ -744,9 +745,9 @@
 	}
 	dt[data-fn] { cursor: help; }
 
-	/* ─── 스파크라인 툴팁 ──────────────────────────────────────────────────── */
-	/* position: fixed → 뷰포트(화면 전체) 기준 고정 위치. 부모 overflow 영향 없음. */
-	/* pointer-events: none → 툴팁 자체가 마우스 이벤트를 가로채지 않음.         */
+	/* ─── sparkline tooltip ──────────────────────────────────────────────── */
+	/* position: fixed → fixed relative to viewport; unaffected by parent overflow. */
+	/* pointer-events: none → tooltip does not intercept mouse events.            */
 	:global(.spark-tip) {
 		position: fixed;
 		z-index: 9999;

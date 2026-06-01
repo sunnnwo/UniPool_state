@@ -1,41 +1,42 @@
 <script lang="ts">
-	// ─── FactoryCard.svelte — Factory 컨트랙트 데이터 표시 컴포넌트 ──────────
+	// ─── FactoryCard.svelte — Factory contract data display component ───────
 	//
-	// ■ Factory(팩토리)란?
-	//   UniPool 프로토콜 전체를 관리하는 "마스터 컨트랙트".
-	//   역할 두 가지:
-	//   1) Pair 풀 생성: 새로운 토큰 쌍(예: WETH/USDC)의 유동성 풀을 배포(deploy)한다.
-	//   2) 전역 파라미터 관리: 수수료, 이자율 모델, 청산 비율 등
-	//      프로토콜 전체에 적용되는 기본값(default)을 저장한다.
-	//      각 Pair는 이 기본값을 상속받되, 개별 설정으로 덮어쓸 수 있다.
+	// ■ What is the Factory?
+	//   The "master contract" that manages the entire UniPool protocol.
+	//   Two roles:
+	//   1) Pair pool creation: deploys new liquidity pools for token pairs (e.g. WETH/USDC).
+	//   2) Global parameter management: stores the protocol-wide defaults for
+	//      fees, interest rate model, liquidation ratios, etc.
+	//      Each Pair inherits these defaults but can override them individually.
 	//
-	// ■ Beacon Proxy(비콘 프록시)란?
-	//   스마트 컨트랙트 업그레이드 패턴 중 하나.
-	//   모든 Pair 컨트랙트가 "Beacon"이라는 단일 주소를 가리키고,
-	//   Beacon은 현재 사용할 구현체(implementation) 주소를 저장한다.
-	//   프로토콜 팀이 Beacon의 구현체 주소만 바꾸면 모든 Pair가 한 번에 업그레이드된다.
-	//   → 각 Pair를 개별적으로 업그레이드하는 것보다 훨씬 가스(gas) 비용 절약.
+	// ■ What is a Beacon Proxy?
+	//   A smart contract upgrade pattern.
+	//   All Pair contracts point to a single address called the "Beacon".
+	//   The Beacon stores the address of the current implementation contract.
+	//   When the protocol team updates the Beacon's implementation address,
+	//   all Pairs upgrade simultaneously.
+	//   → Far cheaper in gas than upgrading each Pair individually.
 	//
-	// ■ bps(베이시스 포인트, Basis Points)란?
-	//   수수료나 이자율을 표현하는 단위. 1 bps = 0.01% = 0.0001.
-	//   예) 30 bps = 0.30%, 8000 bps = 80.00%
-	//   정수(integer)로 저장해 소수점 오차를 없애기 위해 사용.
-	//   화면 표시 시 bpsToPercent(30) → "0.30%"으로 변환.
+	// ■ What are bps (Basis Points)?
+	//   A unit for expressing fees or rates. 1 bps = 0.01% = 0.0001.
+	//   e.g. 30 bps = 0.30%, 8000 bps = 80.00%
+	//   Stored as integers to eliminate floating-point rounding errors.
+	//   Display: bpsToPercent(30) → "0.30%".
 	//
-	// ■ IRM(Interest Rate Model, 이자율 모델)이란?
-	//   대출 사용률(utilization)에 따라 이자율을 동적으로 결정하는 공식.
-	//   UniPool은 "Kinked IRM(꺾임 모델)"을 사용:
-	//   - 사용률 < optimalPoint  → 낮은 기본 이자율(Base Rate)
-	//   - 사용률 = optimalPoint  → 꺾임점 이자율(Optimal Rate)
-	//   - 사용률 > optimalPoint  → 급격히 상승하는 이자율(+ Add Rate)
-	//   이 꺾임 구조 덕분에 적정 수준의 유동성을 유지할 수 있다.
+	// ■ What is an IRM (Interest Rate Model)?
+	//   A formula that dynamically determines the interest rate based on utilization.
+	//   UniPool uses a "Kinked IRM":
+	//   - utilization < optimalPoint  → low base interest rate (Base Rate)
+	//   - utilization = optimalPoint  → target interest rate (Optimal Rate)
+	//   - utilization > optimalPoint  → sharply rising interest rate (+ Add Rate)
+	//   This kinked structure helps maintain appropriate liquidity levels.
 
 	import type { FactoryData } from '../config/fetchFactory';
 	import { bpsToPercent } from '../config/fetchFactory';
-	// bpsToPercent: bps 정수 → 퍼센트 문자열 변환 유틸리티.
-	// 예) bpsToPercent(30) → "0.30%"
+	// bpsToPercent: utility that converts a bps integer → percentage string.
+	// e.g. bpsToPercent(30) → "0.30%"
 
-	// ─── Props (부모에서 전달받는 값들) ────────────────────────────────────────
+	// ─── Props (values passed in from the parent component) ───────────────────
 	let {
 		chainLabel,
 		data,
@@ -50,27 +51,27 @@
 		error?: string | null;
 	} = $props();
 
-	// ─── diff 배지 헬퍼 함수들 ───────────────────────────────────────────────
+	// ─── Diff badge helper functions ─────────────────────────────────────────
 
-	// bps 차이를 "▲ +30 bps" 또는 "▼ -30 bps" 형태 문자열로 반환.
-	// 변화 없으면 null → 템플릿에서 {#if lbl} 조건으로 배지를 숨김.
+	// Returns a bps difference as "▲ +30 bps" or "▼ -30 bps" string.
+	// Returns null if unchanged → template hides the badge with {#if lbl}.
 	function nd(curr: number, prev: number): string | null {
 		const d = curr - prev;
 		if (d === 0) return null;
 		return d > 0 ? `▲ +${d} bps` : `▼ ${d} bps`;
 	}
 
-	// 방향만 반환 ('up' | 'down' | null) → CSS 클래스 .diff.up / .diff.down 결정.
-	// .diff.up  → 초록색 (값 상승)
-	// .diff.down → 빨간색 (값 하락)
+	// Returns direction only ('up' | 'down' | null) → determines CSS class .diff.up / .diff.down.
+	// .diff.up   → green (value increased)
+	// .diff.down → red (value decreased)
 	function nd_dir(curr: number, prev: number): 'up' | 'down' | null {
 		if (curr === prev) return null;
 		return curr > prev ? 'up' : 'down';
 	}
 
-	// ─── 복사 상태 ────────────────────────────────────────────────────────────
-	// $state: 어떤 버튼이 최근에 눌렸는지 키를 저장해 복사 피드백 표시.
-	// 버튼 클릭 → copied = 키 → 1초 후 null 복원 → 버튼 라벨 원상복구.
+	// ─── Copy state ───────────────────────────────────────────────────────────
+	// $state: stores the key of the most recently clicked button to show copy feedback.
+	// Button click → copied = key → null restored after 1 second → button label resets.
 	let copied = $state<string | null>(null);
 
 	let dtTipText = $state('');
@@ -78,22 +79,22 @@
 	let dtTipY = $state(0);
 	let dtTipVisible = $state(false);
 
-	// 42자리 이더리움 주소 → "0x1234...abcd" 단축 표시.
+	// Shortens a 42-character Ethereum address to "0x1234...abcd".
 	function shortenAddress(addr: string | undefined): string {
 		if (!addr) return '—';
 		return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 	}
 
-	// 클립보드에 복사하고 1초간 피드백 표시.
+	// Copies text to clipboard and shows feedback for 1 second.
 	function copy(key: string, text: string) {
 		navigator.clipboard.writeText(text);
 		copied = key;
 		setTimeout(() => (copied = null), 1000);
 	}
 
-	// 카드 전체 데이터를 사람이 읽기 쉬운 JSON으로 복사.
-	// - bigint → .toString() (JSON.stringify는 bigint 직접 처리 불가)
-	// - bps 숫자 → bpsToPercent() 문자열 (예: 30 → "0.30%")
+	// Copies the full card data as human-readable JSON.
+	// - bigint → .toString() (JSON.stringify cannot handle bigint directly)
+	// - bps number → bpsToPercent() string (e.g. 30 → "0.30%")
 	function copyAll() {
 		if (!data) return;
 		const readable = {
@@ -138,7 +139,7 @@
 		dtTipVisible = true;
 	} else { dtTipVisible = false; }
 }} onmouseleave={() => { dtTipVisible = false; }}>
-	<!-- ─ 카드 헤더: 타이틀 + 전체 복사 버튼 ─ -->
+	<!-- ─ Card header: title + copy-all button ─ -->
 	<div class="card-header">
 		<h2>{chainLabel} — Factory</h2>
 		{#if data}
@@ -156,13 +157,13 @@
 		<p class="state-msg muted">Not loaded</p>
 	{:else}
 
-		<!-- ─ Addresses (주소 목록) ─────────────────────────────────────────── -->
-		<!--   프로토콜의 핵심 컨트랙트 주소들.                                     -->
-		<!--   feeCollector: 수수료를 모으는 지갑 주소 (프로토콜 수익처)            -->
-		<!--   beaconAddress: Beacon Proxy 구현체 주소 (Pair 업그레이드 기준점)    -->
-		<!--   vault: 유휴 자금을 Aave에 예치해 이자를 버는 Vault 컨트랙트 주소    -->
-		<!--   aavePool: 연결된 Aave 대출 풀 주소                                 -->
-		<!--   allPairsLength: 현재까지 생성된 Pair 풀 수                          -->
+		<!-- ─ Addresses ─────────────────────────────────────────────────────── -->
+		<!--   Core protocol contract addresses.                                    -->
+		<!--   feeCollector: wallet address that collects protocol fees             -->
+		<!--   beaconAddress: Beacon Proxy implementation address (upgrade anchor)  -->
+		<!--   vault: Vault contract that deposits idle funds into Aave for yield   -->
+		<!--   aavePool: connected Aave lending pool address                        -->
+		<!--   allPairsLength: total number of Pair pools deployed so far           -->
 		<section>
 			<h3>Addresses</h3>
 			<dl>
@@ -209,12 +210,12 @@
 			</dl>
 		</section>
 
-		<!-- ─ Fees (수수료) ──────────────────────────────────────────────────── -->
-		<!--   스왑(토큰 교환) 시 부과되는 수수료 구조:                              -->
-		<!--   feeLp    : LP(유동성 공급자)에게 돌아가는 수수료. 예) 0.30%          -->
-		<!--   feePool  : 프로토콜 운영 수수료. feeCollector 주소로 전송.           -->
-		<!--   burnFee  : LP 토큰 소각(burn) 시 부과 수수료.                       -->
-		<!--   세 수수료 합계 = 사용자가 실제로 부담하는 총 스왑 수수료.              -->
+		<!-- ─ Fees ──────────────────────────────────────────────────────────── -->
+		<!--   Fee structure applied on each swap (token exchange):                 -->
+		<!--   feeLp    : fee returned to LPs (liquidity providers). e.g. 0.30%    -->
+		<!--   feePool  : protocol operations fee, sent to feeCollector address.    -->
+		<!--   burnFee  : fee charged when LP tokens are burned.                    -->
+		<!--   sum of all three = total swap fee paid by the user.                  -->
 		<section>
 			<h3>Fees</h3>
 			<dl>
@@ -242,14 +243,14 @@
 			</dl>
 		</section>
 
-		<!-- ─ Interest Rate Model (이자율 모델) ─────────────────────────────── -->
-		<!--   Kinked IRM(꺾임 이자율 모델) 파라미터:                             -->
-		<!--   protocolFeeBps    : 이자 수익 중 프로토콜이 가져가는 비율.           -->
-		<!--   optimalPointBps   : 이자율 곡선이 꺾이는 사용률 기준점(%)            -->
-		<!--                       예) 80%이면 사용률 80% 이상부터 이자율 급등.    -->
-		<!--   interestRateBaseBps   : 사용률 0일 때 연이자율.                    -->
-		<!--   interestRateOptimalBps: optimalPoint 사용률에서의 연이자율.         -->
-		<!--   interestRateAddBps    : optimalPoint 초과 시 추가 연이자율.        -->
+		<!-- ─ Interest Rate Model ───────────────────────────────────────────── -->
+		<!--   Kinked IRM parameters:                                               -->
+		<!--   protocolFeeBps    : share of interest revenue taken by the protocol. -->
+		<!--   optimalPointBps   : utilization threshold where the rate curve kinks -->
+		<!--                       e.g. 80% → rate spikes above 80% utilization.   -->
+		<!--   interestRateBaseBps   : annual rate at 0% utilization.               -->
+		<!--   interestRateOptimalBps: annual rate at optimal utilization.           -->
+		<!--   interestRateAddBps    : additional annual rate above optimal.         -->
 		<section>
 			<h3>Interest Rate Model</h3>
 			<dl>
@@ -291,15 +292,15 @@
 			</dl>
 		</section>
 
-		<!-- ─ Borrow / Liquidation (대출 / 청산) ─────────────────────────────── -->
-		<!--   borrowLimitBps       : 담보 가치 대비 최대 대출 가능 비율 (LTV).    -->
-		<!--                          예) 8000 bps = 80% → 100 USDC 담보 시      -->
-		<!--                          최대 80 USDC까지 대출 가능.                 -->
-		<!--   liquidationPenaltyBps: 청산(liquidation) 발생 시 청산자가 받는 보상. -->
-		<!--                          담보 자산의 일부를 할인가로 가져가는 형태.     -->
-		<!--   maxBorrowPerTick      : 하나의 가격 구간(tick)에서 허용하는           -->
-		<!--                          최대 대출 비율. 집중 위험 방지용.             -->
-		<!--   maxBorrowPerRange     : 연속된 틱 범위 전체 대출 한도.              -->
+		<!-- ─ Borrow / Liquidation ──────────────────────────────────────────── -->
+		<!--   borrowLimitBps       : max loan-to-value ratio (LTV).               -->
+		<!--                          e.g. 8000 bps = 80% → $100 collateral        -->
+		<!--                          allows up to $80 borrow.                      -->
+		<!--   liquidationPenaltyBps: bonus paid to the liquidator when a position  -->
+		<!--                          is liquidated (as a discount on collateral).  -->
+		<!--   maxBorrowPerTick      : max borrow ratio per single price tick;       -->
+		<!--                          prevents concentration risk.                  -->
+		<!--   maxBorrowPerRange     : max borrow ratio across a full tick range.   -->
 		<section>
 			<h3>Borrow / Liquidation</h3>
 			<dl>
@@ -334,13 +335,13 @@
 			</dl>
 		</section>
 
-		<!-- ─ Price / Tick (가격 / 틱 파라미터) ─────────────────────────────── -->
-		<!--   priceDecay         : 가상 가격(virtual price)이 실제 시장가로        -->
-		<!--                        수렴하는 속도. 클수록 빠르게 수렴.              -->
-		<!--   swapPriceToleranceBps: 스왑 실행 시 허용하는 최대 슬리피지.          -->
-		<!--                          슬리피지 = 예상 체결가와 실제 체결가의 차이.  -->
-		<!--   tickBuffer         : 청산 계산 시 가격 구간에 추가하는 여유 틱 수.   -->
-		<!--                        갑작스러운 가격 변동에 대한 안전마진 역할.       -->
+		<!-- ─ Price / Tick ──────────────────────────────────────────────────── -->
+		<!--   priceDecay         : speed at which virtual price converges to       -->
+		<!--                        market price. Higher = faster convergence.      -->
+		<!--   swapPriceToleranceBps: max allowed slippage during a swap.           -->
+		<!--                          slippage = expected vs. actual execution price.-->
+		<!--   tickBuffer         : extra ticks added to price range in liquidation  -->
+		<!--                        calculations; acts as a safety margin.          -->
 		<section>
 			<h3>Price / Tick</h3>
 			<dl>
@@ -381,7 +382,7 @@
 {/if}
 
 <style>
-	/* ─ 카드 전체 ─────────────────────────────────────────────────────────── */
+	/* ─ card container ──────────────────────────────────────────────────── */
 	.card {
 		border: 1px solid #e2e8f0;
 		border-radius: 12px;
@@ -390,7 +391,7 @@
 		min-width: 280px;
 	}
 
-	/* ─ 헤더: 타이틀 + Copy all 버튼 ──────────────────────────────────────── */
+	/* ─ header: title + Copy all button ───────────────────────────────────── */
 	.card-header {
 		display: flex;
 		align-items: center;
@@ -405,7 +406,7 @@
 		margin: 0;
 	}
 
-	/* ─ 섹션 구분선 ────────────────────────────────────────────────────────── */
+	/* ─ section dividers ────────────────────────────────────────────────────── */
 	section {
 		margin-bottom: 1rem;
 	}
@@ -418,7 +419,7 @@
 		margin: 0 0 0.15rem;
 	}
 
-	/* ─ dl / 행 레이아웃 ──────────────────────────────────────────────────── */
+	/* ─ dl / row layout ───────────────────────────────────────────────────── */
 	dl {
 		margin: 0;
 	}
@@ -432,13 +433,13 @@
 	.row:last-child {
 		border-bottom: none;
 	}
-	/* dt: 레이블. flex-shrink:0 → 공간 부족해도 줄어들지 않음. */
+	/* dt: label. flex-shrink:0 → does not shrink even when space is tight. */
 	dt {
 		font-size: 0.75rem;
 		color: #64748b;
 		flex-shrink: 0;
 	}
-	/* dd: 값. flex:1 → 남은 공간 전부 차지. justify-content:flex-end → 오른쪽 정렬. */
+	/* dd: value. flex:1 → takes all remaining space. justify-content:flex-end → right-align. */
 	dd {
 		font-size: 0.75rem;
 		font-family: monospace;
@@ -455,7 +456,7 @@
 		text-align: right;
 	}
 
-	/* ─ 버튼들 ─────────────────────────────────────────────────────────────── */
+	/* ─ buttons ─────────────────────────────────────────────────────────────── */
 	.copy-btn {
 		font-size: 0.7rem;
 		padding: 0.2rem 0.5rem;
@@ -479,7 +480,7 @@
 	}
 	.copy-icon:hover { color: #475569; }
 
-	/* ─ 상태 메시지 ────────────────────────────────────────────────────────── */
+	/* ─ state messages ──────────────────────────────────────────────────────── */
 	.state-msg {
 		font-size: 0.85rem;
 		text-align: center;
@@ -491,7 +492,7 @@
 
 	dt[data-fn] { cursor: help; }
 
-	/* ─ diff 배지: 값이 올랐으면 초록, 내렸으면 빨강 ──────────────────────── */
+	/* ─ diff badge: green if value increased, red if decreased ─────────────── */
 	.diff {
 		font-size: 0.65rem;
 		font-weight: 600;

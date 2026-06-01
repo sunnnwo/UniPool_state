@@ -1,37 +1,37 @@
 <script lang="ts">
-	// ─── VaultCard.svelte — Vault 컨트랙트 데이터 표시 컴포넌트 ─────────────
+	// ─── VaultCard.svelte — Vault contract data display component ────────────
 	//
-	// 이 컴포넌트는 VaultData 하나를 받아 카드 형태로 보여준다.
-	// 날짜 비교 기능 사용 시 prevData도 받아 수치 변화를 diff 배지로 표시.
+	// Receives a single VaultData and renders it as a card.
+	// When date comparison is active, prevData is also received and numeric changes are shown with diff badges.
 
 	import type { VaultData } from '../config/fetchVault';
 
-	// $props(): Svelte 5 룬. 부모 컴포넌트에서 전달받은 값을 구조 분해.
-	// data: 현재(또는 종료일) 시점의 Vault 데이터
-	// prevData: 비교 기준(시작일) 시점의 Vault 데이터 (없으면 diff 배지 미표시)
-	// tokenSymbols: 토큰 주소(소문자) → 심볼 맵. 부모가 pairs 데이터에서 빌드해 전달.
+	// $props(): Svelte 5 rune. Destructures values passed in from the parent component.
+	// data: Vault data at the current (or end date) snapshot
+	// prevData: Vault data at the comparison (start date) snapshot (diff badges hidden if null)
+	// tokenSymbols: token address (lowercase) → symbol map, built from pairs data by the parent.
 	let {
 		data,
 		prevData = null,
 		tokenSymbols = {}
 	}: { data: VaultData; prevData?: VaultData | null; tokenSymbols?: Record<string, string> } = $props();
 
-	// bigint 두 값의 차이를 diff 배지 정보로 반환.
-	// bigint: JavaScript의 특별한 정수 타입. 솔리디티 uint256을 안전하게 처리하기 위해 사용.
-	//   - 일반 number는 2^53까지만 정확 (약 9경)
-	//   - uint256은 2^256까지 → bigint 필요
-	//   - 리터럴 표기: 0n, 100n, -5n (끝에 n을 붙임)
-	//   - 연산: curr - prev는 bigint끼리 해야 함 (bigint + number 불가)
+	// Returns diff badge info for two bigint values.
+	// bigint: a special integer type in JavaScript. Used to safely handle Solidity uint256.
+	//   - regular number is only accurate up to 2^53 (~9 quadrillion)
+	//   - uint256 goes up to 2^256 → bigint is required
+	//   - literals: 0n, 100n, -5n (append n)
+	//   - arithmetic: curr - prev must be between bigints (bigint + number is not allowed)
 	//
-	// 반환값: { label: "▲ +1234", dir: "up" } 또는 null(변화 없음)
+	// Returns: { label: "▲ +1234", dir: "up" } or null (no change)
 	function bigDiff(curr: bigint, prev: bigint): { label: string; dir: 'up' | 'down' } | null {
 		if (curr === prev) return null;
 		const d = curr - prev;
-		const abs = d < 0n ? -d : d; // 절댓값 계산 (bigint는 Math.abs 사용 불가)
+		const abs = d < 0n ? -d : d; // absolute value (bigint does not support Math.abs)
 		return { label: d > 0n ? `▲ +${abs}` : `▼ -${abs}`, dir: d > 0n ? 'up' : 'down' };
 	}
 
-	// $state: 복사 피드백 상태. 어떤 버튼이 최근에 눌렸는지 키를 저장.
+	// $state: copy feedback state. Stores the key of the most recently clicked button.
 	let copied = $state<string | null>(null);
 
 	let dtTipText = $state('');
@@ -50,8 +50,8 @@
 		setTimeout(() => (copied = null), 1000);
 	}
 
-	// 카드 전체 데이터를 JSON으로 복사.
-	// bigint를 .toString()으로 변환해야 JSON.stringify가 처리 가능.
+	// Copies the full card data as JSON.
+	// bigint must be converted to .toString() for JSON.stringify to handle it.
 	function copyAll() {
 		const readable = {
 			address: data.address,
@@ -59,16 +59,16 @@
 			aavePool: data.aavePool,
 			tokens: data.tokens.map((t) => ({
 				token: t.token,
-				// isIdle: true = 이 토큰은 Vault에서 그냥 보관 중 (Aave 미예치)
+				// isIdle: true = this token is held in the Vault (not deposited to Aave)
 				isIdle: t.isIdle,
 				isActive: t.assetData.isActive,
 				isSupported: t.assetData.isSupported,
-				// yieldAccumulator: Aave 이자 누적 배율 (RAY = 10^27 단위의 bigint)
+				// yieldAccumulator: cumulative Aave yield multiplier (bigint in RAY = 10^27 units)
 				yieldAccumulator: t.assetData.yieldAccumulator.toString(),
 				lastYieldAccumulator: t.assetData.lastYieldAccumulator.toString(),
 				aave: {
 					isSupported: t.aaveSupport.isSupported,
-					// aToken: Aave에서 예치 시 받는 이자 토큰 주소 (예: aUSDC)
+					// aToken: interest-bearing token address received from Aave on deposit (e.g. aUSDC)
 					aToken: t.aaveSupport.aToken,
 					currentBalance: t.aaveSupport.currentBalance.toString(),
 					targetBalance: t.aaveSupport.targetBalance.toString()
@@ -125,7 +125,7 @@
 		</dl>
 	</section>
 
-	<!-- 토큰별 섹션 -->
+	<!-- per-token sections -->
 	{#each data.tokens as t, i (t.token)}
 		{@const pt = prevData?.tokens[i] ?? null}
 		{@const sym = tokenSymbols[t.token.toLowerCase()] ?? ''}

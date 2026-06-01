@@ -53,12 +53,12 @@
   {#if factoryOpen}
     <div class="item-list">
       {#if sortedFactories.length === 0}
-        <p class="empty-hint">데이터를 먼저 로드해주세요</p>
+        <p class="empty-hint">Load data first</p>
       {:else}
         {#if sidebarStore.selectedFactoryCount > 0}
           <div class="filter-bar">
-            <span class="filter-label">🔍 {sidebarStore.selectedFactoryCount}개 필터 중</span>
-            <button class="clear-btn" onclick={() => clearAll('factory')}>전체 해제</button>
+            <span class="filter-label">🔍 {sidebarStore.selectedFactoryCount} filtered</span>
+            <button class="clear-btn" onclick={() => clearAll('factory')}>Clear all</button>
           </div>
         {/if}
         {#each sortedFactories as entry (entry.chain)}
@@ -97,12 +97,12 @@
   {#if vaultOpen}
     <div class="item-list">
       {#if sortedVaults.length === 0}
-        <p class="empty-hint">데이터를 먼저 로드해주세요</p>
+        <p class="empty-hint">Load data first</p>
       {:else}
         {#if sidebarStore.selectedVaultCount > 0}
           <div class="filter-bar">
-            <span class="filter-label">🔍 {sidebarStore.selectedVaultCount}개 필터 중</span>
-            <button class="clear-btn" onclick={() => clearAll('vault')}>전체 해제</button>
+            <span class="filter-label">🔍 {sidebarStore.selectedVaultCount} filtered</span>
+            <button class="clear-btn" onclick={() => clearAll('vault')}>Clear all</button>
           </div>
         {/if}
         {#each sortedVaults as entry (entry.chain)}
@@ -141,12 +141,12 @@
   {#if pairsOpen}
     <div class="item-list">
       {#if sortedPairs.length === 0}
-        <p class="empty-hint">데이터를 먼저 로드해주세요</p>
+        <p class="empty-hint">Load data first</p>
       {:else}
         {#if sidebarStore.selectedCount > 0}
           <div class="filter-bar">
-            <span class="filter-label">🔍 {sidebarStore.selectedCount}개 필터 중</span>
-            <button class="clear-btn" onclick={() => clearAll('pair')}>전체 해제</button>
+            <span class="filter-label">🔍 {sidebarStore.selectedCount} filtered</span>
+            <button class="clear-btn" onclick={() => clearAll('pair')}>Clear all</button>
           </div>
         {/if}
         {#each sortedPairs as pair (pair.address)}
@@ -237,7 +237,7 @@
   }
   .chevron.open { transform: rotate(90deg); }
 
-  /* ── 공통 드롭다운 ── */
+  /* ── shared dropdown ── */
   .item-list {
     padding: 0 0 0.5rem;
     background: #0a1120;

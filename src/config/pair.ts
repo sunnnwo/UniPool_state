@@ -1,19 +1,19 @@
 // ─── Pair ABI ──────────────────────────────────────────────────────────────────
-// 실제 온체인 검증 완료 (Arbitrum Pair: 0xfa896ef9659ea0dcf42c751e2b1f78f626fe8f56)
+// On-chain verification complete (Arbitrum Pair: 0xfa896ef9659ea0dcf42c751e2b1f78f626fe8f56)
 //
-// ── tuple 구조 검증 방법 ────────────────────────────────────────────────────────
-// 반환 바이트 수로 필드 개수를 역산함: 바이트 ÷ 32 = 필드 수
-// 예) 320바이트 ÷ 32 = 10필드 → 5필드짜리 tuple 두 개 (token0 + token1)
-//     128바이트 ÷ 32 = 4필드 → 4필드짜리 tuple 하나
+// ── How to verify tuple structure ────────────────────────────────────────────
+// Back-calculate field count from returned byte size: bytes ÷ 32 = field count
+// e.g. 320 bytes ÷ 32 = 10 fields → two 5-field tuples (token0 + token1)
+//      128 bytes ÷ 32 = 4 fields  → one 4-field tuple
 //
-// ── Factory ABI와 다른 점 ────────────────────────────────────────────────────
-// getInterestParamsBps: Factory = 160바이트(tuple 1개), Pair = 320바이트(tuple 2개)
-// getFeesBps: 둘 다 96바이트(3개) — 동일
-// getLoanFeesBps: Pair에만 있음 (64바이트, 2개)
+// ── Differences from Factory ABI ─────────────────────────────────────────────
+// getInterestParamsBps: Factory = 160 bytes (1 tuple), Pair = 320 bytes (2 tuples)
+// getFeesBps: both 96 bytes (3 fields) — identical
+// getLoanFeesBps: Pair only (64 bytes, 2 fields)
 
 export const PAIR_ABI = [
-	// ─── 식별 ────────────────────────────────────────────────────────────────────
-	// 64바이트 = 32×2 → address 두 개
+	// ─── Identification ─────────────────────────────────────────────────────────
+	// 64 bytes = 32×2 → two addresses
 	{
 		type: 'function',
 		name: 'getTokens',
@@ -25,7 +25,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 = address 하나
+		// 32 bytes = one address
 		type: 'function',
 		name: 'getFactory',
 		inputs: [],
@@ -33,8 +33,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── 유동성 ──────────────────────────────────────────────────────────────────
-	// 64바이트 = 32×2 → uint256 두 개
+	// ─── Liquidity ───────────────────────────────────────────────────────────────
+	// 64 bytes = 32×2 → two uint256
 	{
 		type: 'function',
 		name: 'getReserves',
@@ -46,8 +46,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 128바이트 = 32×4 → tuple 하나, 4개 필드
-		// ┌─ 검증: 128 ÷ 32 = 4 ✅
+		// 128 bytes = 32×4 → one tuple, 4 fields
+		// ┌─ Verified: 128 ÷ 32 = 4 ✅
 		// virtualReserve0In / 0Out / 1In / 1Out
 		type: 'function',
 		name: 'getVirtualReserves',
@@ -67,8 +67,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── 수수료 ──────────────────────────────────────────────────────────────────
-	// 96바이트 = 32×3 → uint16 세 개 (Factory와 동일 구조)
+	// ─── Fees ────────────────────────────────────────────────────────────────────
+	// 96 bytes = 32×3 → three uint16 (same structure as Factory)
 	{
 		type: 'function',
 		name: 'getFeesBps',
@@ -81,8 +81,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 64바이트 = 32×2 → uint16 두 개
-		// Pair에만 있음 — token0, token1 각각 loanFee
+		// 64 bytes = 32×2 → two uint16
+		// Pair only — loanFee for token0 and token1 respectively
 		type: 'function',
 		name: 'getLoanFeesBps',
 		inputs: [],
@@ -93,7 +93,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 = address 하나
+		// 32 bytes = one address
 		type: 'function',
 		name: 'getFeeCollector',
 		inputs: [],
@@ -101,17 +101,17 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── 이자율 모델 ─────────────────────────────────────────────────────────────
+	// ─── Interest Rate Model ──────────────────────────────────────────────────────
 	{
-		// 320바이트 = 32×10 = 5필드 × 2개 tuple (token0 + token1)
-		// ┌─ 검증: 320 ÷ 32 = 10 = 5×2 ✅
-		// ┌─ Factory와 차이: Factory는 160바이트(tuple 1개), Pair는 320바이트(tuple 2개)
-		// 필드 구조 (token0, token1 동일):
-		//   protocolFeeBps      uint16  → 프로토콜 수수료 비율
-		//   optimalPointBps     uint16  → 최적 이용률 지점
-		//   interestRateBaseBps uint32  → 기본 이자율 (uint32라서 큰 값 가능)
-		//   interestRateOptimalBps uint32 → 최적점에서의 이자율
-		//   interestRateAddBps  uint32  → 최적점 초과 시 추가 이자율
+		// 320 bytes = 32×10 = 5 fields × 2 tuples (token0 + token1)
+		// ┌─ Verified: 320 ÷ 32 = 10 = 5×2 ✅
+		// ┌─ Differs from Factory: Factory = 160 bytes (1 tuple), Pair = 320 bytes (2 tuples)
+		// Field layout (same for token0 and token1):
+		//   protocolFeeBps         uint16  → protocol fee ratio
+		//   optimalPointBps        uint16  → optimal utilization point
+		//   interestRateBaseBps    uint32  → base interest rate (uint32 allows large values)
+		//   interestRateOptimalBps uint32  → interest rate at optimal utilization
+		//   interestRateAddBps     uint32  → additional rate above optimal utilization
 		type: 'function',
 		name: 'getInterestParamsBps',
 		inputs: [],
@@ -142,8 +142,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 → uint256 하나
-		// INTEREST_MULTIPLIER_DECIMALS()로 나눠서 실제 배율 계산
+		// 32 bytes → one uint256
+		// Divide by INTEREST_MULTIPLIER_DECIMALS() to get the actual multiplier
 		type: 'function',
 		name: 'getInterestMultiplier0',
 		inputs: [],
@@ -158,8 +158,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 → uint256 하나
-		// RAY 단위 (소수점 27자리) → RAY_DECIMALS()로 나눠서 % 표시
+		// 32 bytes → one uint256
+		// RAY unit (27 decimal places) → divide by RAY_DECIMALS() for % display
 		type: 'function',
 		name: 'calcVariableInterestRate0',
 		inputs: [],
@@ -174,7 +174,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 64바이트 = 32×2 → uint256 두 개 (yieldAcc0, yieldAcc1)
+		// 64 bytes = 32×2 → two uint256 (yieldAcc0, yieldAcc1)
 		type: 'function',
 		name: 'getLastYieldAccumulator',
 		inputs: [],
@@ -185,8 +185,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── 대출 현황 ────────────────────────────────────────────────────────────────
-	// 32바이트 → uint256 하나
+	// ─── Borrow State ────────────────────────────────────────────────────────────
+	// 32 bytes → one uint256
 	{
 		type: 'function',
 		name: 'getTotalBorrowed0',
@@ -202,7 +202,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 64바이트 = 32×2 → uint256 두 개
+		// 64 bytes = 32×2 → two uint256
 		type: 'function',
 		name: 'getAccumulatedPoolFees',
 		inputs: [],
@@ -213,8 +213,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 → uint256 (Unix timestamp)
-		// 표시 시: new Date(Number(value) * 1000).toLocaleString()
+		// 32 bytes → uint256 (Unix timestamp)
+		// Display: new Date(Number(value) * 1000).toLocaleString()
 		type: 'function',
 		name: 'getLastUpdateTimestamp',
 		inputs: [],
@@ -222,7 +222,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 → uint256
+		// 32 bytes → uint256
 		type: 'function',
 		name: 'getNextLoanId',
 		inputs: [],
@@ -230,10 +230,10 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── 공통 파라미터 getter (Pair 개별값) ──────────────────────────────────────
-	// Factory와 동일한 ABI — Pair 주소로 호출하면 해당 Pair의 개별값 반환
+	// ─── Common parameter getters (per-Pair values) ──────────────────────────────
+	// Same ABI as Factory — calling with a Pair address returns that Pair's individual value
 	{
-		// 32바이트 → uint16
+		// 32 bytes → uint16
 		type: 'function',
 		name: 'getBorrowLimitBps',
 		inputs: [],
@@ -248,7 +248,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 64바이트 = 32×2 → uint32 두 개
+		// 64 bytes = 32×2 → two uint32
 		type: 'function',
 		name: 'getMaxBorrowPerTickAndRange',
 		inputs: [],
@@ -259,7 +259,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 → uint128 (bigint)
+		// 32 bytes → uint128 (bigint)
 		type: 'function',
 		name: 'getPriceDecay',
 		inputs: [],
@@ -274,7 +274,7 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 32바이트 → int16 (signed — 음수 가능)
+		// 32 bytes → int16 (signed — can be negative)
 		type: 'function',
 		name: 'getTickBuffer',
 		inputs: [],
@@ -282,9 +282,9 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── ERC20 (LP 토큰) ──────────────────────────────────────────────────────────
-	// name(), symbol(): 96바이트 → string (ABI 인코딩: offset 32 + length 32 + data 32)
-	// decimals(), totalSupply(): 32바이트 → 단순 값
+	// ─── ERC20 (LP Token) ────────────────────────────────────────────────────────
+	// name(), symbol(): 96 bytes → string (ABI encoding: offset 32 + length 32 + data 32)
+	// decimals(), totalSupply(): 32 bytes → simple value
 	{
 		type: 'function',
 		name: 'name',
@@ -314,8 +314,8 @@ export const PAIR_ABI = [
 		stateMutability: 'view'
 	},
 
-	// ─── 상수 (pure — 체인 읽기 없음, 항상 고정값) ───────────────────────────────
-	// 32바이트씩
+	// ─── Constants (pure — no chain reads, always fixed) ─────────────────────────
+	// 32 bytes each
 	{
 		type: 'function',
 		name: 'MINIMUM_LIQUIDITY',
@@ -324,7 +324,7 @@ export const PAIR_ABI = [
 		stateMutability: 'pure'
 	},
 	{
-		// getInterestMultiplier0/1() 결과를 해석할 때 이 값으로 나눔
+		// Divide getInterestMultiplier0/1() result by this value to interpret it
 		type: 'function',
 		name: 'INTEREST_MULTIPLIER_DECIMALS',
 		inputs: [],
@@ -332,7 +332,7 @@ export const PAIR_ABI = [
 		stateMutability: 'pure'
 	},
 	{
-		// calcVariableInterestRate0/1() 결과를 해석할 때 이 값으로 나눔 (보통 27)
+		// Divide calcVariableInterestRate0/1() result by this value to interpret it (typically 27)
 		type: 'function',
 		name: 'RAY_DECIMALS',
 		inputs: [],

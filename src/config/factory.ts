@@ -53,9 +53,9 @@ export const FACTORY_ABI = [
 		stateMutability: 'view'
 	},
 	{
-		// 실제 확인 결과: tuple 하나만 반환 (160바이트 = 5개 필드 × 32바이트)
-		// Pair ABI의 token0/token1 두 개와 달리 Factory는 단일 tuple
-		// 필드값 예시: [1500, 9000, 0, 1500, 18500]
+		// Confirmed on-chain: returns a single tuple (160 bytes = 5 fields × 32 bytes)
+		// Unlike Pair ABI which has separate token0/token1 tuples, Factory returns one tuple
+		// Example field values: [1500, 9000, 0, 1500, 18500]
 		type: 'function',
 		name: 'getInterestParamsBps',
 		inputs: [],
