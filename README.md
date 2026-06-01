@@ -25,14 +25,6 @@ A read-only dashboard that fetches and displays all contract parameters from the
 
 ---
 
-## Prerequisites
-
-- Node.js 18+
-- A free [Alchemy](https://www.alchemy.com) account for Arbitrum and Base RPC endpoints
-- BSC uses a public RPC — no account needed
-
----
-
 ## Setup
 
 ### 1. Install dependencies
