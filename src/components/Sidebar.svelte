@@ -5,6 +5,7 @@
   let factoryOpen = $state(false);
   let vaultOpen = $state(false);
   let pairsOpen = $state(false);
+  let collapsed = $state(false);
 
   const sortedPairs = $derived(
     [...sidebarStore.pairs].sort((a, b) =>
@@ -31,8 +32,15 @@
   }
 </script>
 
-<nav class="sidebar">
-  <div class="sidebar-title">Menu</div>
+<nav class="sidebar" class:collapsed>
+  <div class="sidebar-header">
+    {#if !collapsed}<span class="sidebar-title">Menu</span>{/if}
+    <button class="collapse-btn" onclick={() => (collapsed = !collapsed)} title={collapsed ? '사이드바 열기' : '사이드바 닫기'}>
+      {collapsed ? '›' : '‹'}
+    </button>
+  </div>
+
+  {#if !collapsed}
 
   <!-- ── Factory ── -->
   <button
@@ -168,6 +176,7 @@
       {/if}
     </div>
   {/if}
+  {/if}
 </nav>
 
 <style>
@@ -184,6 +193,48 @@
     padding: 1rem 0;
     overflow-y: auto;
     font-family: system-ui, sans-serif;
+    transition: width 0.2s ease, min-width 0.2s ease;
+  }
+
+  .sidebar.collapsed {
+    width: 40px;
+    min-width: 40px;
+    overflow: hidden;
+  }
+
+  .sidebar.collapsed .sidebar-header {
+    padding: 0 0 0.75rem;
+    justify-content: center;
+  }
+
+  .collapse-btn {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #94a3b8;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .collapse-btn:hover {
+    background: #334155;
+    color: #e2e8f0;
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.5rem 0.75rem 1rem;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 0.5rem;
   }
 
   .sidebar-title {
@@ -192,9 +243,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #64748b;
-    padding: 0 1rem 0.75rem;
-    border-bottom: 1px solid #1e293b;
-    margin-bottom: 0.5rem;
   }
 
   .nav-item {
