@@ -5,6 +5,8 @@
 	// When date comparison is active, prevData is also received and numeric changes are shown with diff badges.
 
 	import type { VaultData } from '../config/fetchVault';
+	import type { ChainKey } from '../config/chains';
+	import type { EditDraft, EditField } from '../config/editing';
 
 	// $props(): Svelte 5 rune. Destructures values passed in from the parent component.
 	// data: Vault data at the current (or end date) snapshot
@@ -13,8 +15,18 @@
 	let {
 		data,
 		prevData = null,
-		tokenSymbols = {}
-	}: { data: VaultData; prevData?: VaultData | null; tokenSymbols?: Record<string, string> } = $props();
+		tokenSymbols = {},
+		chainKey = undefined,
+		chainLabel = '',
+		onEdit = undefined
+	}: {
+		data: VaultData;
+		prevData?: VaultData | null;
+		tokenSymbols?: Record<string, string>;
+		chainKey?: ChainKey;
+		chainLabel?: string;
+		onEdit?: (draft: EditDraft) => void;
+	} = $props();
 
 	// Returns diff badge info for two bigint values.
 	// bigint: a special integer type in JavaScript. Used to safely handle Solidity uint256.
@@ -61,23 +73,36 @@
 				token: t.token,
 				// isIdle: true = this token is held in the Vault (not deposited to Aave)
 				isIdle: t.isIdle,
-				isActive: t.assetData.isActive,
-				isSupported: t.assetData.isSupported,
-				// yieldAccumulator: cumulative Aave yield multiplier (bigint in RAY = 10^27 units)
-				yieldAccumulator: t.assetData.yieldAccumulator.toString(),
-				lastYieldAccumulator: t.assetData.lastYieldAccumulator.toString(),
+				totalBalance: t.assetData.totalBalance.toString(),
+				totalShares: t.assetData.totalShares.toString(),
+				forceIdle: t.assetData.forceIdle,
+				yieldAccumulator: t.yieldAccumulator.toString(),
 				aave: {
-					isSupported: t.aaveSupport.isSupported,
-					// aToken: interest-bearing token address received from Aave on deposit (e.g. aUSDC)
-					aToken: t.aaveSupport.aToken,
-					currentBalance: t.aaveSupport.currentBalance.toString(),
-					targetBalance: t.aaveSupport.targetBalance.toString()
+					supported: t.aaveSupport.supported,
+					frozen: t.aaveSupport.frozen,
+					paused: t.aaveSupport.paused,
+					migrateAsset: t.aaveSupport.migrateAsset
 				}
 			}))
 		};
 		navigator.clipboard.writeText(JSON.stringify(readable, null, 2));
 		copied = '__all__';
 		setTimeout(() => (copied = null), 1000);
+	}
+
+	function editVault(title: string, fields: EditField[], buildArgs: EditDraft['buildArgs']) {
+		if (!chainKey || !onEdit) return;
+		onEdit({
+			chainKey,
+			chainName: chainLabel,
+			targetLabel: 'Vault',
+			targetAddress: data.address,
+			contractKind: 'vault',
+			functionName: 'setForceIdle',
+			title,
+			fields,
+			buildArgs
+		});
 	}
 </script>
 
@@ -145,8 +170,18 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt data-fn="getAssetData() → isSupported — Whether this token is enabled for yield management in this vault">Supported</dt>
-					<dd>{t.assetData.isSupported ? 'Yes' : 'No'}</dd>
+					<dt data-fn="getAssetData() → forceIdle — Whether this token is forced to stay idle in this vault">Force Idle</dt>
+					<dd>
+						{t.assetData.forceIdle ? 'Yes' : 'No'}
+						<button class="edit-icon" title="Edit setting" onclick={() => editVault(
+							`Force Idle ${sym || shortenAddress(t.token)}`,
+							[
+								{ key: 'token', label: 'Token', type: 'address', value: t.token },
+								{ key: 'forceIdle', label: 'Force idle', type: 'bool', value: String(t.assetData.forceIdle) }
+							],
+							(values) => [values.token, values.forceIdle]
+						)}>✎</button>
+					</dd>
 				</div>
 				<div class="row">
 					<dt data-fn="getYieldAccumulator() — Normalized yield accumulator in RAY (10²⁷). Starts at 1.000000×, increases as Aave interest accrues">Yield Accumulator</dt>
@@ -156,10 +191,17 @@
 					</dd>
 				</div>
 				<div class="row">
-					<dt data-fn="getAssetData() → lastYieldAccumulator — Raw accumulator at last on-chain update. Difference from current = pending unrecorded interest">Last Yield Acc. (raw)</dt>
+					<dt data-fn="getAssetData() → totalBalance — Total token balance tracked by the vault">Total Balance</dt>
 					<dd>
-						{t.assetData.lastYieldAccumulator.toString()}
-						{#if pt}{@const d = bigDiff(t.assetData.lastYieldAccumulator, pt.assetData.lastYieldAccumulator)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+						{t.assetData.totalBalance.toString()}
+						{#if pt}{@const d = bigDiff(t.assetData.totalBalance, pt.assetData.totalBalance)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					</dd>
+				</div>
+				<div class="row">
+					<dt data-fn="getAssetData() → totalShares — Total vault shares tracked for this token">Total Shares</dt>
+					<dd>
+						{t.assetData.totalShares.toString()}
+						{#if pt}{@const d = bigDiff(t.assetData.totalShares, pt.assetData.totalShares)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 					</dd>
 				</div>
 			</dl>
@@ -168,15 +210,16 @@
 				<h4>Aave Support</h4>
 				<dl>
 					<div class="row">
-						<dt data-fn="getAaveTokenSupport() → isSupported — Whether Aave supports this token as a deposit asset">Supported</dt>
-						<dd>{t.aaveSupport.isSupported ? 'Yes' : 'No'}</dd>
+						<dt data-fn="getAaveTokenSupport() → supported — Whether Aave supports this token as a deposit asset">Supported</dt>
+						<dd>{t.aaveSupport.supported ? 'Yes' : 'No'}</dd>
 					</div>
 					<div class="row">
-						<dt data-fn="getAaveTokenSupport() → currentBalance — aToken balance held by the vault (Aave deposit receipt token). 0 when isIdle = true">Current Balance</dt>
-						<dd>
-							{t.aaveSupport.currentBalance.toString()}
-							{#if pt}{@const d = bigDiff(t.aaveSupport.currentBalance, pt.aaveSupport.currentBalance)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
-						</dd>
+						<dt data-fn="getAaveTokenSupport() → frozen — Whether Aave marks this asset as frozen">Frozen</dt>
+						<dd>{t.aaveSupport.frozen ? 'Yes' : 'No'}</dd>
+					</div>
+					<div class="row">
+						<dt data-fn="getAaveTokenSupport() → paused — Whether Aave marks this asset as paused">Paused</dt>
+						<dd>{t.aaveSupport.paused ? 'Yes' : 'No'}</dd>
 					</div>
 				</dl>
 			</div>
@@ -303,6 +346,16 @@
 		line-height: 1;
 	}
 	.copy-icon:hover { color: #475569; }
+	.edit-icon {
+		font-size: 0.7rem;
+		padding: 0 3px;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		color: #16a34a;
+		line-height: 1;
+	}
+	.edit-icon:hover { color: #15803d; }
 	dt[data-fn] { cursor: help; }
 
 	.diff {

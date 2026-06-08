@@ -11,7 +11,8 @@
 	import type { PairData } from '../config/fetchpairs';
 	import { bpsToPercent, formatTimestamp, formatAmount } from '../config/fetchpairs';
 	import Sparkline from './Sparkline.svelte';
-	import { CHAINS } from '../config/chains';
+	import { CHAINS, type ChainKey } from '../config/chains';
+	import type { EditDraft, EditField } from '../config/editing';
 
 	// Reverse mapping: factory address (lowercase) → chain name.
 	// e.g. "0xa882...b6a7" → "Arbitrum One"
@@ -28,8 +29,17 @@
 		data,
 		prevData = null,
 		history = [],
-		chainLabel = ''
-	}: { data: PairData; prevData?: PairData | null; history?: PairData[]; chainLabel?: string } = $props();
+		chainLabel = '',
+		chainKey = undefined,
+		onEdit = undefined
+	}: {
+		data: PairData;
+		prevData?: PairData | null;
+		history?: PairData[];
+		chainLabel?: string;
+		chainKey?: ChainKey;
+		onEdit?: (draft: EditDraft) => void;
+	} = $props();
 
 	// Returns diff badge info for two bps (basis point) numbers.
 	// e.g. nd(330, 300) → { label: "▲ +30 bps", dir: "up" }
@@ -215,6 +225,29 @@
 		copied = '__all__';
 		setTimeout(() => (copied = null), 1000);
 	}
+
+	function editPair(title: string, functionName: string, fields: EditField[], buildArgs: EditDraft['buildArgs']) {
+		if (!chainKey || !onEdit) return;
+		onEdit({
+			chainKey,
+			chainName: chainLabel,
+			targetLabel: data.symbol || shortenAddress(data.address),
+			targetAddress: data.factory,
+			contractKind: 'factory',
+			functionName,
+			title,
+			fields,
+			buildArgs
+		});
+	}
+
+	function pairTargets() {
+		return [data.address];
+	}
+
+	function pairToken(isToken0: boolean) {
+		return [{ pair: data.address, isToken0 }];
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -314,6 +347,16 @@
 				<dd>
 					{bpsToPercent(data.fees.feeLp)}
 					{#if prevData}{@const d = nd(data.fees.feeLp, prevData.fees.feeLp)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit fee settings" onclick={() => editPair(
+						'Pair Fees',
+						'setFees',
+						[
+							{ key: 'feeLpBps', label: 'LP fee bps', type: 'uint16', value: String(data.fees.feeLp) },
+							{ key: 'feePoolBps', label: 'Pool fee bps', type: 'uint16', value: String(data.fees.feePool) },
+							{ key: 'burnFeeBps', label: 'Burn fee bps', type: 'uint16', value: String(data.fees.burnFee) }
+						],
+						(values) => [values.feeLpBps, values.feePoolBps, values.burnFeeBps, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -335,6 +378,12 @@
 				<dd>
 					{bpsToPercent(data.loanFees.loanFee0)}
 					{#if prevData}{@const d = nd(data.loanFees.loanFee0, prevData.loanFees.loanFee0)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Loan Fee 0',
+						'setLoanFeeBps',
+						[{ key: 'loanFeeBps', label: 'Loan fee bps', type: 'uint16', value: String(data.loanFees.loanFee0) }],
+						(values) => [values.loanFeeBps, pairToken(true)]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -342,6 +391,12 @@
 				<dd>
 					{bpsToPercent(data.loanFees.loanFee1)}
 					{#if prevData}{@const d = nd(data.loanFees.loanFee1, prevData.loanFees.loanFee1)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Loan Fee 1',
+						'setLoanFeeBps',
+						[{ key: 'loanFeeBps', label: 'Loan fee bps', type: 'uint16', value: String(data.loanFees.loanFee1) }],
+						(values) => [values.loanFeeBps, pairToken(false)]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -351,6 +406,12 @@
 					<button class="copy-icon" onclick={() => copy('fc', data.feeCollector)}
 						>{copied === 'fc' ? '✓' : '⎘'}</button
 					>
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Fee Collector',
+						'setFeeCollector',
+						[{ key: 'newFeeCollector', label: 'New fee collector', type: 'address', value: data.feeCollector }],
+						(values) => [values.newFeeCollector, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 		</dl>
@@ -370,8 +431,42 @@
 			<div class="row">
 				<dt data-fn="getInterestParamsBps() → protocolFeeBps — Share of interest revenue taken by the protocol">Protocol Fee</dt>
 				<dd>
-					<span class="irm-v">{bpsToPercent(data.interestParams.token0.protocolFeeBps)}{#if prevData}{@const d = nd(data.interestParams.token0.protocolFeeBps, prevData.interestParams.token0.protocolFeeBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
-					<span class="irm-v">{bpsToPercent(data.interestParams.token1.protocolFeeBps)}{#if prevData}{@const d = nd(data.interestParams.token1.protocolFeeBps, prevData.interestParams.token1.protocolFeeBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}</span>
+					<span class="irm-v">{bpsToPercent(data.interestParams.token0.protocolFeeBps)}{#if prevData}{@const d = nd(data.interestParams.token0.protocolFeeBps, prevData.interestParams.token0.protocolFeeBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}<button class="edit-icon" title="Edit token0 IRM" onclick={() => editPair(
+						`Interest Rates ${data.token0Symbol || 'Token 0'}`,
+						'setInterestRates',
+						[
+							{ key: 'protocolFeeBps', label: 'Protocol fee bps', type: 'uint16', value: String(data.interestParams.token0.protocolFeeBps) },
+							{ key: 'optimalPointBps', label: 'Optimal point bps', type: 'uint16', value: String(data.interestParams.token0.optimalPointBps) },
+							{ key: 'interestRateBaseBps', label: 'Base rate bps', type: 'uint32', value: String(data.interestParams.token0.interestRateBaseBps) },
+							{ key: 'interestRateOptimalBps', label: 'Optimal rate bps', type: 'uint32', value: String(data.interestParams.token0.interestRateOptimalBps) },
+							{ key: 'interestRateAddBps', label: 'Add rate bps', type: 'uint32', value: String(data.interestParams.token0.interestRateAddBps) }
+						],
+						(values) => [{
+							protocolFeeBps: values.protocolFeeBps,
+							optimalPointBps: values.optimalPointBps,
+							interestRateBaseBps: values.interestRateBaseBps,
+							interestRateOptimalBps: values.interestRateOptimalBps,
+							interestRateAddBps: values.interestRateAddBps
+						}, pairToken(true), false]
+					)}>✎</button></span>
+					<span class="irm-v">{bpsToPercent(data.interestParams.token1.protocolFeeBps)}{#if prevData}{@const d = nd(data.interestParams.token1.protocolFeeBps, prevData.interestParams.token1.protocolFeeBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}<button class="edit-icon" title="Edit token1 IRM" onclick={() => editPair(
+						`Interest Rates ${data.token1Symbol || 'Token 1'}`,
+						'setInterestRates',
+						[
+							{ key: 'protocolFeeBps', label: 'Protocol fee bps', type: 'uint16', value: String(data.interestParams.token1.protocolFeeBps) },
+							{ key: 'optimalPointBps', label: 'Optimal point bps', type: 'uint16', value: String(data.interestParams.token1.optimalPointBps) },
+							{ key: 'interestRateBaseBps', label: 'Base rate bps', type: 'uint32', value: String(data.interestParams.token1.interestRateBaseBps) },
+							{ key: 'interestRateOptimalBps', label: 'Optimal rate bps', type: 'uint32', value: String(data.interestParams.token1.interestRateOptimalBps) },
+							{ key: 'interestRateAddBps', label: 'Add rate bps', type: 'uint32', value: String(data.interestParams.token1.interestRateAddBps) }
+						],
+						(values) => [{
+							protocolFeeBps: values.protocolFeeBps,
+							optimalPointBps: values.optimalPointBps,
+							interestRateBaseBps: values.interestRateBaseBps,
+							interestRateOptimalBps: values.interestRateOptimalBps,
+							interestRateAddBps: values.interestRateAddBps
+						}, pairToken(false), false]
+					)}>✎</button></span>
 				</dd>
 			</div>
 			<div class="row">
@@ -497,6 +592,12 @@
 				<dd onmouseenter={(e) => enterSpark('borrowLimit', 'Borrow Limit', (p) => p.borrowLimitBps / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.borrowLimitBps)}
 					{#if prevData}{@const d = nd(data.borrowLimitBps, prevData.borrowLimitBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Borrow Limit',
+						'setBorrowLimitBps',
+						[{ key: 'borrowLimitBps', label: 'Borrow limit bps', type: 'uint16', value: String(data.borrowLimitBps) }],
+						(values) => [values.borrowLimitBps, pairTargets(), false]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -504,6 +605,12 @@
 				<dd onmouseenter={(e) => enterSpark('liqPenalty', 'Liquidation Penalty', (p) => p.liquidationPenaltyBps / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.liquidationPenaltyBps)}
 					{#if prevData}{@const d = nd(data.liquidationPenaltyBps, prevData.liquidationPenaltyBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Liquidation Penalty',
+						'setLiquidationPenaltyBps',
+						[{ key: 'liquidationPenaltyBps', label: 'Liquidation penalty bps', type: 'uint16', value: String(data.liquidationPenaltyBps) }],
+						(values) => [values.liquidationPenaltyBps, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -511,6 +618,15 @@
 				<dd onmouseenter={(e) => enterSpark('maxTick', 'Max Borrow / Tick', (p) => p.maxBorrowPerTick / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.maxBorrowPerTick)}
 					{#if prevData}{@const d = nd(data.maxBorrowPerTick, prevData.maxBorrowPerTick)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit max borrow settings" onclick={() => editPair(
+						'Max Borrow Per Tick / Range',
+						'setMaxBorrowPerTickAndRange',
+						[
+							{ key: 'maxBorrowPerTickBps', label: 'Max borrow per tick bps', type: 'uint32', value: String(data.maxBorrowPerTick) },
+							{ key: 'maxBorrowPerTickRangeBps', label: 'Max borrow per range bps', type: 'uint32', value: String(data.maxBorrowPerRange) }
+						],
+						(values) => [values.maxBorrowPerTickBps, values.maxBorrowPerTickRangeBps, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -525,6 +641,12 @@
 				<dd onmouseenter={(e) => enterSpark('priceDecay', 'Price Decay', (p) => Number(p.priceDecay), e)} onmouseleave={leaveSpark}>
 					{data.priceDecay.toString()}
 					{#if prevData}{@const d = bd(data.priceDecay, prevData.priceDecay)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Price Decay',
+						'setPriceDecay',
+						[{ key: 'priceDecay', label: 'Price decay', type: 'uint128', value: data.priceDecay.toString() }],
+						(values) => [values.priceDecay, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -532,6 +654,12 @@
 				<dd onmouseenter={(e) => enterSpark('swapTol', 'Swap Tolerance', (p) => p.swapPriceToleranceBps / 100, e)} onmouseleave={leaveSpark}>
 					{bpsToPercent(data.swapPriceToleranceBps)}
 					{#if prevData}{@const d = nd(data.swapPriceToleranceBps, prevData.swapPriceToleranceBps)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Swap Price Tolerance',
+						'setSwapPriceToleranceBps',
+						[{ key: 'swapPriceToleranceBps', label: 'Swap tolerance bps', type: 'uint16', value: String(data.swapPriceToleranceBps) }],
+						(values) => [values.swapPriceToleranceBps, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 			<div class="row">
@@ -542,6 +670,12 @@
 						{@const delta = data.tickBuffer - prevData.tickBuffer}
 						<span class="diff {delta > 0 ? 'up' : 'down'}">{delta > 0 ? '▲ +' : '▼ '}{delta}</span>
 					{/if}
+					<button class="edit-icon" title="Edit setting" onclick={() => editPair(
+						'Tick Buffer',
+						'setTickBuffer',
+						[{ key: 'tickBuffer', label: 'Tick buffer', type: 'int16', value: String(data.tickBuffer) }],
+						(values) => [values.tickBuffer, pairTargets()]
+					)}>✎</button>
 				</dd>
 			</div>
 		</dl>
@@ -677,6 +811,16 @@
 		line-height: 1;
 	}
 	.copy-icon:hover { color: #475569; }
+	.edit-icon {
+		font-size: 0.7rem;
+		padding: 0 3px;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		color: #16a34a;
+		line-height: 1;
+	}
+	.edit-icon:hover { color: #15803d; }
 	.diff {
 		font-size: 0.65rem;
 		font-weight: 600;

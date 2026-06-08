@@ -42,8 +42,8 @@ import { createPublicClient, http, formatUnits } from 'viem';
 //      formatUnits(1000000000000000000n, 18) → "1.000000000000000000"  (1 ETH: 18 decimals)
 
 import type { CHAINS } from './chains';
-import { PAIR_ABI } from './pair';
-import { FACTORY_ABI } from './factory';
+import { UniPoolPairAbi as PAIR_ABI } from '../../abi/UniPoolPair';
+import { UniPoolFactoryAbi as FACTORY_ABI } from '../../abi/UniPoolFactory';
 
 // Minimal ERC-20 ABI needed only for token symbol/decimals lookups.
 // Defines only the 2 required functions instead of the full ERC-20 ABI to reduce bundle size.
@@ -334,9 +334,9 @@ export async function fetchAllPairs(
 	if (length === 0) return [];
 
 	// Step 1: Batch-fetch Pair addresses at indices 0~(length-1) from the Factory.
-	// allowFailure: false → failing to fetch a Pair address is a fatal error → throws.
+	// allowFailure: true keeps one reverted index from blanking the entire Pairs section.
 	const indexResults = await client.multicall({
-		allowFailure: false,
+		allowFailure: true,
 		...(blockNumber !== undefined ? { blockNumber } : {}),
 		contracts: Array.from({ length }, (_, i) => ({
 			address: factoryAddress,
@@ -346,7 +346,9 @@ export async function fetchAllPairs(
 		}))
 	});
 
-	const pairAddresses = indexResults as `0x${string}`[];
+	const pairAddresses = indexResults
+		.filter((result) => result.status === 'success')
+		.map((result) => result.result as `0x${string}`);
 
 	// Step 2: Read data from each Pair address in parallel.
 	// Promise.all: runs multiple async tasks concurrently → waits for the slowest one.

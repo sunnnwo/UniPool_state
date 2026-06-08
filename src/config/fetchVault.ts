@@ -26,39 +26,22 @@
 // ■ What is a Yield Accumulator?
 //   A cumulative multiplier used to fairly distribute Aave-earned interest to LPs.
 //   Conceptually similar to a "compound index" in a bank savings account.
-//   - yieldAccumulator: current cumulative multiplier
-//   - lastYieldAccumulator: multiplier at the time of the last on-chain update
-//   Difference between the two = additional Aave interest accrued since the last update
+//   getYieldAccumulator() exposes the current multiplier for each asset.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { createPublicClient, http } from 'viem';
 import type { CHAINS } from './chains';
-import { VAULT_ABI } from './vault';
+import { UniPoolVaultAbi as VAULT_ABI } from '../../abi/UniPoolVault';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // Return structure of getAssetData
 // Returned from Solidity as a 128-byte struct (4 fields × 32 bytes each).
 type AssetData = {
-	// Internal interest accumulation tracker inside the Vault.
-	// NOTE: scale varies per token — may not be in RAY (10^27) units.
-	//   e.g. EV token ≈ 10^27, USDT ≈ 10^10, WETH ≈ 10^18
-	// For the externally exposed RAY-normalised value use getYieldAccumulator() (VaultTokenData.yieldAccumulator).
-	// This value is used to calculate "additional interest since the last update" by comparing with lastYieldAccumulator.
-	yieldAccumulator: bigint;
-
-	// Internal accumulator value at the time of the last on-chain update (same scale as assetData.yieldAccumulator).
-	// Difference from the current yieldAccumulator = Aave interest not yet reflected.
-	lastYieldAccumulator: bigint;
-
-	// Whether this token is activated in the Vault.
-	// If false, Vault operations (deposit/withdraw) are not available for this token.
-	isActive: boolean;
-
-	// Whether this token is configured to receive Aave interest.
-	// false = Aave interest not supported. Vault can still track/hold the token (operates as isIdle=true).
-	// NOTE: does NOT mean "completely unsupported by the Vault" — it just means Aave integration is disabled.
-	isSupported: boolean;
+	totalBalance: bigint;
+	totalShares: bigint;
+	isIdle: boolean;
+	forceIdle: boolean;
 };
 
 // Return structure of getAaveTokenSupport
@@ -67,19 +50,10 @@ type AssetData = {
 type AaveTokenSupport = {
 	// Whether this token is configured for Aave integration.
 	// false = this Vault operates without Aave (token is simply held in the Vault).
-	isSupported: boolean;
-
-	// Address of the aToken (interest-bearing token) received when depositing this token into Aave.
-	// e.g. deposit USDC → aUSDC address is stored here.
-	// Zero address (0x000...000) if Aave is not used.
-	aToken: `0x${string}`;
-
-	// Amount the Vault currently has deposited in Aave.
-	currentBalance: bigint;
-
-	// Target amount the Vault intends to deposit into Aave.
-	// targetBalance > currentBalance → deposit still in progress.
-	targetBalance: bigint;
+	supported: boolean;
+	frozen: boolean;
+	paused: boolean;
+	migrateAsset: boolean;
 };
 
 // All Vault-related data bundled for a single token
@@ -96,8 +70,6 @@ export type VaultTokenData = {
 	// Result of getYieldAccumulator(). Always a RAY (10^27) normalised Yield Accumulator.
 	// Initial value is 1 RAY (= 10^27). Increases as interest accumulates.
 	// e.g. 1.001 × 10^27 → 0.1% interest accumulated.
-	// NOTE: different from assetData.yieldAccumulator — assetData uses per-token internal scale,
-	//       this value is RAY-normalised. Use this value for display purposes.
 	yieldAccumulator: bigint;
 };
 
@@ -193,16 +165,16 @@ export async function fetchVaultData(
 
 	// ── Step 3: Parse results ─────────────────────────────────────────────────
 	const ASSET_FALLBACK: AssetData = {
-		yieldAccumulator: 0n,
-		lastYieldAccumulator: 0n,
-		isActive: false,
-		isSupported: false
+		totalBalance: 0n,
+		totalShares: 0n,
+		isIdle: false,
+		forceIdle: false
 	};
 	const AAVE_FALLBACK: AaveTokenSupport = {
-		isSupported: false,
-		aToken: ZERO,
-		currentBalance: 0n,
-		targetBalance: 0n
+		supported: false,
+		frozen: false,
+		paused: false,
+		migrateAsset: false
 	};
 
 	const tokens: VaultTokenData[] = tokenAddresses.map((token, i) => {

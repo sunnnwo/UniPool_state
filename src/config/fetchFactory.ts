@@ -31,7 +31,7 @@ import { createPublicClient, http } from 'viem';
 // http: transport that connects to an RPC node over HTTPS.
 
 import type { CHAINS } from './chains';
-import { FACTORY_ABI } from './factory';
+import { UniPoolFactoryAbi as FACTORY_ABI } from '../../abi/UniPoolFactory';
 // What is an ABI (Application Binary Interface)?
 // A specification describing what functions a contract has, what parameters they accept, and what they return.
 // viem uses the ABI to automatically infer types and handle encoding/decoding during function calls.
@@ -109,6 +109,8 @@ export type FactoryData = {
 		// Swap fee that burns (destroys) a portion of LP tokens, in bps.
 		// Burning reduces total token supply → increases value of remaining tokens.
 		burnFee: number;
+		// Fee charged for loans, in bps.
+		loanFee: number;
 	};
 
 	// Interest rate model parameters (see InterestParams above).
@@ -170,7 +172,7 @@ export async function fetchFactoryData(config: ChainConfig, blockNumber?: bigint
 			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getVault' },                  // [2]
 			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getAavePool' },               // [3]
 			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getAllPairsLength' },         // [4]
-			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getFeesBps' },               // [5] → returns: [feeLp, feePool, burnFee]
+			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getFeesBps' },               // [5] → returns: [feeLp, feePool, burnFee, loanFee]
 			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getInterestParamsBps' },     // [6] → returns: single tuple object
 			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getBorrowLimitBps' },        // [7]
 			{ address: config.factory, abi: FACTORY_ABI, functionName: 'getLiquidationPenaltyBps' }, // [8]
@@ -190,9 +192,9 @@ export async function fetchFactoryData(config: ChainConfig, blockNumber?: bigint
 		return r.status === 'success' ? (r.result as T) : fallback;
 	}
 
-	// [5] getFeesBps → Solidity returns (uint16 feeLp, uint16 feePool, uint16 burnFee).
-	//     viem multicall returns multiple values as an array: [feeLp, feePool, burnFee]
-	const fees = get<readonly [number, number, number]>(5, [0, 0, 0]);
+	// [5] getFeesBps → Solidity returns (uint16 feeLp, uint16 feePool, uint16 burnFee, uint16 loanFee).
+	//     viem multicall returns multiple values as an array: [feeLp, feePool, burnFee, loanFee]
+	const fees = get<readonly [number, number, number, number]>(5, [0, 0, 0, 0]);
 
 	// [6] getInterestParamsBps → Factory returns a single tuple → viem converts to an object.
 	//     (Unlike Pair, Factory has one parameter set — no token0/token1 distinction)
@@ -217,7 +219,7 @@ export async function fetchFactoryData(config: ChainConfig, blockNumber?: bigint
 		vault: get<`0x${string}`>(2, ZERO),
 		aavePool: get<`0x${string}`>(3, ZERO),
 		allPairsLength: get<bigint>(4, 0n), // 0n: BigInt literal (different type from the number 0)
-		fees: { feeLp: fees[0], feePool: fees[1], burnFee: fees[2] },
+		fees: { feeLp: fees[0], feePool: fees[1], burnFee: fees[2], loanFee: fees[3] },
 		interestParams: interest,
 		borrowLimitBps: get<number>(7, 0),
 		liquidationPenaltyBps: get<number>(8, 0),

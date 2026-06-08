@@ -33,6 +33,8 @@
 
 	import type { FactoryData } from '../config/fetchFactory';
 	import { bpsToPercent } from '../config/fetchFactory';
+	import type { ChainKey } from '../config/chains';
+	import type { EditDraft, EditField } from '../config/editing';
 	// bpsToPercent: utility that converts a bps integer → percentage string.
 	// e.g. bpsToPercent(30) → "0.30%"
 
@@ -42,13 +44,23 @@
 		data,
 		prevData = null,
 		loading = false,
-		error = null
+		error = null,
+		chainKey = undefined,
+		factoryAddress = undefined,
+		pairAddresses = [],
+		defaultPairAddresses = [],
+		onEdit = undefined
 	}: {
 		chainLabel: string;
 		data: FactoryData | null;
 		prevData?: FactoryData | null;
 		loading?: boolean;
 		error?: string | null;
+		chainKey?: ChainKey;
+		factoryAddress?: `0x${string}`;
+		pairAddresses?: `0x${string}`[];
+		defaultPairAddresses?: `0x${string}`[];
+		onEdit?: (draft: EditDraft) => void;
 	} = $props();
 
 	// ─── Diff badge helper functions ─────────────────────────────────────────
@@ -106,7 +118,8 @@
 			fees: {
 				feeLp:    bpsToPercent(data.fees.feeLp),
 				feePool:  bpsToPercent(data.fees.feePool),
-				burnFee:  bpsToPercent(data.fees.burnFee)
+				burnFee:  bpsToPercent(data.fees.burnFee),
+				loanFee:  bpsToPercent(data.fees.loanFee)
 			},
 			interestParams: {
 				protocolFeeBps:        bpsToPercent(data.interestParams.protocolFeeBps),
@@ -126,6 +139,34 @@
 		navigator.clipboard.writeText(JSON.stringify(readable, null, 2));
 		copied = '__all__';
 		setTimeout(() => (copied = null), 1000);
+	}
+
+	function editFactory(title: string, functionName: string, fields: EditField[], buildArgs: EditDraft['buildArgs']) {
+		if (!data || !chainKey || !factoryAddress || !onEdit) return;
+		onEdit({
+			chainKey,
+			chainName: chainLabel,
+			targetLabel: 'Factory',
+			targetAddress: factoryAddress,
+			contractKind: 'factory',
+			functionName,
+			title,
+			fields,
+			buildArgs
+		});
+	}
+
+	function pairTargets() {
+		return defaultPairAddresses.length > 0 ? defaultPairAddresses : pairAddresses.slice(0, 1);
+	}
+
+	function pairField(): EditField {
+		return {
+			key: 'pairs',
+			label: 'Pairs address[]',
+			type: 'address[]',
+			value: pairTargets().join('\n')
+		};
 	}
 </script>
 
@@ -174,6 +215,15 @@
 						<button class="copy-icon" onclick={() => copy('feeCollector', data.feeCollector)}>
 							{copied === 'feeCollector' ? '✓' : '⎘'}
 						</button>
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Fee Collector',
+							'setFeeCollector',
+							[
+								{ key: 'newFeeCollector', label: 'New fee collector', type: 'address', value: data.feeCollector },
+								pairField()
+							],
+							(values) => [values.newFeeCollector, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -224,6 +274,17 @@
 					<dd>
 						{bpsToPercent(data.fees.feeLp)}
 						{#if prevData}{@const lbl = nd(data.fees.feeLp, prevData.fees.feeLp)}{#if lbl}<span class="diff {nd_dir(data.fees.feeLp, prevData.fees.feeLp)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit fee settings" onclick={() => editFactory(
+							'Factory Fees',
+							'setFees',
+							[
+								{ key: 'feeLpBps', label: 'LP fee bps', type: 'uint16', value: String(data.fees.feeLp) },
+								{ key: 'feePoolBps', label: 'Pool fee bps', type: 'uint16', value: String(data.fees.feePool) },
+								{ key: 'burnFeeBps', label: 'Burn fee bps', type: 'uint16', value: String(data.fees.burnFee) },
+								pairField()
+							],
+							(values) => [values.feeLpBps, values.feePoolBps, values.burnFeeBps, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -238,6 +299,19 @@
 					<dd>
 						{bpsToPercent(data.fees.burnFee)}
 						{#if prevData}{@const lbl = nd(data.fees.burnFee, prevData.fees.burnFee)}{#if lbl}<span class="diff {nd_dir(data.fees.burnFee, prevData.fees.burnFee)}">{lbl}</span>{/if}{/if}
+					</dd>
+				</div>
+				<div class="row">
+					<dt data-fn="getFeesBps()[3] — Fee charged for loans">Loan Fee</dt>
+					<dd>
+						{bpsToPercent(data.fees.loanFee)}
+						{#if prevData}{@const lbl = nd(data.fees.loanFee, prevData.fees.loanFee)}{#if lbl}<span class="diff {nd_dir(data.fees.loanFee, prevData.fees.loanFee)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Factory Loan Fee',
+							'setLoanFeeBps',
+							[{ key: 'newLoanFee', label: 'Loan fee bps', type: 'uint16', value: String(data.fees.loanFee) }],
+							(values) => [values.newLoanFee, []]
+						)}>✎</button>
 					</dd>
 				</div>
 			</dl>
@@ -259,6 +333,24 @@
 					<dd>
 						{bpsToPercent(data.interestParams.protocolFeeBps)}
 						{#if prevData}{@const lbl = nd(data.interestParams.protocolFeeBps, prevData.interestParams.protocolFeeBps)}{#if lbl}<span class="diff {nd_dir(data.interestParams.protocolFeeBps, prevData.interestParams.protocolFeeBps)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit IRM settings" onclick={() => editFactory(
+							'Factory Interest Rates',
+							'setInterestRates',
+							[
+								{ key: 'protocolFeeBps', label: 'Protocol fee bps', type: 'uint16', value: String(data.interestParams.protocolFeeBps) },
+								{ key: 'optimalPointBps', label: 'Optimal point bps', type: 'uint16', value: String(data.interestParams.optimalPointBps) },
+								{ key: 'interestRateBaseBps', label: 'Base rate bps', type: 'uint32', value: String(data.interestParams.interestRateBaseBps) },
+								{ key: 'interestRateOptimalBps', label: 'Optimal rate bps', type: 'uint32', value: String(data.interestParams.interestRateOptimalBps) },
+								{ key: 'interestRateAddBps', label: 'Add rate bps', type: 'uint32', value: String(data.interestParams.interestRateAddBps) }
+							],
+							(values) => [{
+								protocolFeeBps: values.protocolFeeBps,
+								optimalPointBps: values.optimalPointBps,
+								interestRateBaseBps: values.interestRateBaseBps,
+								interestRateOptimalBps: values.interestRateOptimalBps,
+								interestRateAddBps: values.interestRateAddBps
+							}, [], false]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -309,6 +401,15 @@
 					<dd>
 						{bpsToPercent(data.borrowLimitBps)}
 						{#if prevData}{@const lbl = nd(data.borrowLimitBps, prevData.borrowLimitBps)}{#if lbl}<span class="diff {nd_dir(data.borrowLimitBps, prevData.borrowLimitBps)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Borrow Limit',
+							'setBorrowLimitBps',
+							[
+								{ key: 'borrowLimitBps', label: 'Borrow limit bps', type: 'uint16', value: String(data.borrowLimitBps) },
+								pairField()
+							],
+							(values) => [values.borrowLimitBps, values.pairs, false]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -316,6 +417,15 @@
 					<dd>
 						{bpsToPercent(data.liquidationPenaltyBps)}
 						{#if prevData}{@const lbl = nd(data.liquidationPenaltyBps, prevData.liquidationPenaltyBps)}{#if lbl}<span class="diff {nd_dir(data.liquidationPenaltyBps, prevData.liquidationPenaltyBps)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Liquidation Penalty',
+							'setLiquidationPenaltyBps',
+							[
+								{ key: 'liquidationPenaltyBps', label: 'Liquidation penalty bps', type: 'uint16', value: String(data.liquidationPenaltyBps) },
+								pairField()
+							],
+							(values) => [values.liquidationPenaltyBps, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -323,6 +433,16 @@
 					<dd>
 						{bpsToPercent(data.maxBorrowPerTick)}
 						{#if prevData}{@const lbl = nd(data.maxBorrowPerTick, prevData.maxBorrowPerTick)}{#if lbl}<span class="diff {nd_dir(data.maxBorrowPerTick, prevData.maxBorrowPerTick)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit max borrow settings" onclick={() => editFactory(
+							'Max Borrow Per Tick / Range',
+							'setMaxBorrowPerTickAndRange',
+							[
+								{ key: 'maxBorrowPerTickBps', label: 'Max borrow per tick bps', type: 'uint32', value: String(data.maxBorrowPerTick) },
+								{ key: 'maxBorrowPerTickRangeBps', label: 'Max borrow per range bps', type: 'uint32', value: String(data.maxBorrowPerRange) },
+								pairField()
+							],
+							(values) => [values.maxBorrowPerTickBps, values.maxBorrowPerTickRangeBps, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -353,6 +473,15 @@
 							{@const d = data.priceDecay - prevData.priceDecay}
 							<span class="diff {d > 0n ? 'up' : 'down'}">{d > 0n ? '▲ +' : '▼ '}{d}</span>
 						{/if}
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Price Decay',
+							'setPriceDecay',
+							[
+								{ key: 'priceDecay', label: 'Price decay', type: 'uint128', value: data.priceDecay.toString() },
+								pairField()
+							],
+							(values) => [values.priceDecay, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -360,6 +489,15 @@
 					<dd>
 						{bpsToPercent(data.swapPriceToleranceBps)}
 						{#if prevData}{@const lbl = nd(data.swapPriceToleranceBps, prevData.swapPriceToleranceBps)}{#if lbl}<span class="diff {nd_dir(data.swapPriceToleranceBps, prevData.swapPriceToleranceBps)}">{lbl}</span>{/if}{/if}
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Swap Price Tolerance',
+							'setSwapPriceToleranceBps',
+							[
+								{ key: 'swapPriceToleranceBps', label: 'Swap tolerance bps', type: 'uint16', value: String(data.swapPriceToleranceBps) },
+								pairField()
+							],
+							(values) => [values.swapPriceToleranceBps, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 				<div class="row">
@@ -370,6 +508,15 @@
 							{@const d = data.tickBuffer - prevData.tickBuffer}
 							<span class="diff {d > 0 ? 'up' : 'down'}">{d > 0 ? '▲ +' : '▼ '}{d}</span>
 						{/if}
+						<button class="edit-icon" title="Edit setting" onclick={() => editFactory(
+							'Tick Buffer',
+							'setTickBuffer',
+							[
+								{ key: 'tickBuffer', label: 'Tick buffer', type: 'int16', value: String(data.tickBuffer) },
+								pairField()
+							],
+							(values) => [values.tickBuffer, values.pairs]
+						)}>✎</button>
 					</dd>
 				</div>
 			</dl>
@@ -479,6 +626,16 @@
 		line-height: 1;
 	}
 	.copy-icon:hover { color: #475569; }
+	.edit-icon {
+		font-size: 0.7rem;
+		padding: 0 3px;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		color: #16a34a;
+		line-height: 1;
+	}
+	.edit-icon:hover { color: #15803d; }
 
 	/* ─ state messages ──────────────────────────────────────────────────────── */
 	.state-msg {

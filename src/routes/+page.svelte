@@ -20,6 +20,14 @@
   import PairCard from '../components/PairCard.svelte';
   import VaultCard from '../components/VaultCard.svelte';
   import { sidebarStore } from '$lib/sidebar.svelte';
+  import {
+    SAFE_BY_CHAIN,
+    buildSafeJson,
+    buildSafeTransaction,
+    parseEditValues,
+    type EditDraft,
+    type SafeTransaction
+  } from '../config/editing';
 
   // ─── State type definition ────────────────────────────────────────────────
   type ChainState = {
@@ -70,6 +78,14 @@
   // Connecting bind:value={searchQuery} to an input means
   // this value updates automatically as the user types.
   let searchQuery = $state('');
+  let safeBatches = $state<Record<ChainKey, SafeTransaction[]>>({
+    arbitrum: [],
+    base: [],
+    bsc: []
+  });
+  let activeEdit = $state<EditDraft | null>(null);
+  let editValues = $state<Record<string, string>>({});
+  let editError = $state<string | null>(null);
 
   // ─── Search query normalisation ──────────────────────────────────────────
   // $derived: a derived value that auto-recalculates whenever searchQuery changes.
@@ -86,6 +102,44 @@
   // .trim(): removes leading and trailing whitespace
   // .toLowerCase(): makes the comparison case-insensitive
   const normalizedQuery = $derived(searchQuery.trim().toLowerCase());
+
+  function openEdit(draft: EditDraft) {
+    activeEdit = draft;
+    editValues = Object.fromEntries(draft.fields.map((field) => [field.key, field.value]));
+    editError = null;
+  }
+
+  function addEditToBatch() {
+    if (!activeEdit) return;
+    const parsed = parseEditValues(activeEdit.fields, editValues);
+    if (parsed.error) {
+      editError = parsed.error;
+      return;
+    }
+    const tx = buildSafeTransaction(activeEdit, parsed.values);
+    safeBatches[activeEdit.chainKey] = [...safeBatches[activeEdit.chainKey], tx];
+    activeEdit = null;
+    editValues = {};
+    editError = null;
+  }
+
+  function removeSafeTx(chainKey: ChainKey, index: number) {
+    safeBatches[chainKey] = safeBatches[chainKey].filter((_, i) => i !== index);
+  }
+
+  function downloadSafeJson(chainKey: ChainKey) {
+    const txs = safeBatches[chainKey];
+    if (txs.length === 0) return;
+    const blob = new Blob([JSON.stringify(buildSafeJson(chainKey, txs), null, 2)], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `unipool-${chainKey}-safe-transactions.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // filterPairs: filters the Pair array using the normalised search query.
   // References normalizedQuery ($derived), so when the query changes the filter result also changes.
@@ -399,6 +453,10 @@
         <div class="chain-header">
           <span class="chain-name">{config.name}</span>
           <div class="chain-actions">
+            <a class="safe-link" href={SAFE_BY_CHAIN[key as ChainKey].url} target="_blank" rel="noreferrer">Safe</a>
+            <button class="download-btn" disabled={safeBatches[key as ChainKey].length === 0} onclick={() => downloadSafeJson(key as ChainKey)}>
+              JSON ({safeBatches[key as ChainKey].length})
+            </button>
             {#if states[key as ChainKey].loadedAt && !states[key as ChainKey].loading}
               {#if states[key as ChainKey].historyLoading}
                 <span class="history-loading">📈 Loading…</span>
@@ -433,6 +491,13 @@
               prevData={null}
               loading={false}
               error={null}
+              chainKey={key as ChainKey}
+              factoryAddress={config.factory}
+              pairAddresses={states[key as ChainKey].pairs.map((p) => p.address)}
+              defaultPairAddresses={states[key as ChainKey].pairs
+                .filter((p) => sidebarStore.isSelected(p.address))
+                .map((p) => p.address)}
+              onEdit={openEdit}
             />
           {/if}
 
@@ -447,6 +512,9 @@
               data={states[key as ChainKey].vault!}
               prevData={null}
               tokenSymbols={symMap}
+              chainKey={key as ChainKey}
+              chainLabel={config.name}
+              onEdit={openEdit}
             />
           {/if}
 
@@ -461,14 +529,70 @@
             </div>
             {#each visible as pair (pair.address)}
               {@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
-              <PairCard data={pair} prevData={null} history={pairHistory} chainLabel={config.name} />
+              <PairCard
+                data={pair}
+                prevData={null}
+                history={pairHistory}
+                chainLabel={config.name}
+                chainKey={key as ChainKey}
+                onEdit={openEdit}
+              />
             {/each}
           {/if}
+        {/if}
+
+        {#if safeBatches[key as ChainKey].length > 0}
+          <div class="safe-batch">
+            {#each safeBatches[key as ChainKey] as tx, i}
+              <div class="safe-tx">
+                <span>{i + 1}. {tx.contractMethod.name}</span>
+                <button onclick={() => removeSafeTx(key as ChainKey, i)}>✕</button>
+              </div>
+            {/each}
+          </div>
         {/if}
       </div>
     {/each}
   </div>
 </main>
+
+{#if activeEdit}
+  <div class="modal-backdrop">
+    <div class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+      <div class="edit-modal-header">
+        <div>
+          <h2 id="edit-modal-title">{activeEdit.title}</h2>
+          <span>{activeEdit.chainName} · {activeEdit.targetLabel}</span>
+        </div>
+        <button class="modal-close" onclick={() => (activeEdit = null)}>✕</button>
+      </div>
+      <div class="edit-fields">
+        {#each activeEdit.fields as field (field.key)}
+          <label>
+            <span>{field.label}</span>
+            {#if field.type === 'bool'}
+              <select bind:value={editValues[field.key]}>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            {:else if field.type === 'address[]'}
+              <textarea bind:value={editValues[field.key]} rows="3"></textarea>
+            {:else}
+              <input bind:value={editValues[field.key]} />
+            {/if}
+          </label>
+        {/each}
+      </div>
+      {#if editError}
+        <p class="edit-error">{editError}</p>
+      {/if}
+      <div class="edit-actions">
+        <button onclick={() => (activeEdit = null)}>Cancel</button>
+        <button class="add-btn" onclick={addEditToBatch}>Add to JSON batch</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   main {
@@ -578,6 +702,41 @@
   .chain-header { display: flex; align-items: center; justify-content: space-between; }
   .chain-actions { display: flex; align-items: center; gap: 0.4rem; }
   .chain-name { font-size: 0.85rem; font-weight: 600; color: #475569; }
+  .safe-link,
+  .download-btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    background: #f0fdf4;
+    color: #15803d;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .download-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .safe-batch {
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    background: #f0fdf4;
+    padding: 0.45rem 0.55rem;
+  }
+  .safe-tx {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+    color: #166534;
+  }
+  .safe-tx button {
+    border: none;
+    background: transparent;
+    color: #15803d;
+    padding: 0.1rem 0.2rem;
+  }
   .pairs-label {
     font-size: 0.75rem;
     font-weight: 600;
@@ -620,4 +779,86 @@
     cursor: pointer;
   }
   button:hover { background: #f1f5f9; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.32);
+  }
+  .edit-modal {
+    width: min(420px, 100%);
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+    padding: 1rem;
+  }
+  .edit-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+  }
+  .edit-modal-header h2 {
+    font-size: 1rem;
+    margin: 0 0 0.15rem;
+  }
+  .edit-modal-header span {
+    font-size: 0.72rem;
+    color: #64748b;
+  }
+  .modal-close {
+    border: none;
+    background: transparent;
+    padding: 0.1rem 0.2rem;
+  }
+  .edit-fields {
+    display: grid;
+    gap: 0.65rem;
+  }
+  .edit-fields label {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: #475569;
+  }
+  .edit-fields input,
+  .edit-fields select,
+  .edit-fields textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 0.45rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  .edit-fields textarea {
+    resize: vertical;
+    min-height: 4.8rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.78rem;
+  }
+  .edit-error {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    color: #dc2626;
+  }
+  .edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .add-btn {
+    border-color: #16a34a;
+    background: #16a34a;
+    color: #fff;
+  }
+  .add-btn:hover { background: #15803d; }
 </style>
