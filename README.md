@@ -1,6 +1,6 @@
 # UniPool Parameter Dashboard
 
-A read-only dashboard that fetches and displays all contract parameters from the UniPool protocol across Arbitrum, Base, and BSC in real time. Designed to compare parameters across chains and across individual trading pairs at a glance.
+A dashboard for reading and editing UniPool protocol parameters across Arbitrum, Base, and BSC. Supports both read-only inspection and Safe-compatible transaction generation for on-chain parameter changes.
 
 ---
 
@@ -11,6 +11,7 @@ A read-only dashboard that fetches and displays all contract parameters from the
 - Reads all **Vault** parameters (asset yield data, Aave integration status)
 - Displays everything side by side so differences across chains are immediately visible
 - All data is fetched via **multicall** — dozens of contract calls are batched into a single network request
+- Lets you **edit parameters** and generates a [Safe](https://app.safe.global) transaction JSON you can import directly into the Gnosis Safe UI
 
 ---
 
@@ -57,7 +58,6 @@ VITE_FACTORY_BSC=0xabD8DC06559634e59F6698c33A5E65e90e917b91
 
 ```bash
 npm run dev
-
 ```
 
 Open `http://localhost:5173` in your browser.
@@ -68,11 +68,13 @@ Open `http://localhost:5173` in your browser.
 npm run build
 ```
 
-### Make Html file
+### Build as a single HTML file
 
 ```bash
 npm run build:html
 ```
+
+Outputs a fully self-contained `dashboard.html` with all assets inlined — no server required.
 
 ---
 
@@ -82,19 +84,23 @@ npm run build:html
 src/
 ├── config/
 │   ├── chains.ts          # Chain metadata + RPC URLs + Factory addresses
+│   ├── editing.ts         # Safe transaction builder — types, validation, JSON export
 │   ├── fetchFactory.ts    # Fetches all Factory getters via multicall
 │   ├── fetchpairs.ts      # Fetches all Pair getters via multicall
-│   ├── fetchVault.ts      # Fetches all Vault getters via multicall
-│   └── abis/
-│       ├── factory.ts     # Factory contract ABI
-│       ├── pair.ts        # Pair contract ABI
-│       └── vault.ts       # Vault contract ABI
+│   └── fetchVault.ts      # Fetches all Vault getters via multicall
 ├── components/
-│   ├── FactoryCard.svelte # Displays Factory parameters
-│   ├── PairCard.svelte    # Displays Pair parameters
-│   └── VaultCard.svelte   # Displays Vault parameters
+│   ├── FactoryCard.svelte # Displays Factory parameters with edit buttons
+│   ├── PairCard.svelte    # Displays Pair parameters with edit buttons
+│   ├── Sidebar.svelte     # Collapsible navigation sidebar (contracts list)
+│   ├── Sparkline.svelte   # Compact inline SVG line chart
+│   └── VaultCard.svelte   # Displays Vault parameters with edit buttons
+├── lib/
+│   ├── index.ts           # Re-exports
+│   └── sidebar.svelte.ts  # Sidebar shared state (Svelte 5 runes store)
 └── routes/
-    └── +page.svelte       # Main page — orchestrates loading and layout
+    ├── +layout.svelte     # App shell with sidebar
+    ├── +layout.ts         # Static adapter config
+    └── +page.svelte       # Main page — orchestrates loading, editing, Safe batch
 ```
 
 ---
@@ -106,6 +112,32 @@ src/
 - **Pair search** — filter pairs by token symbol, name, or address
 - **Copy buttons** — copies individual addresses or the full card as human-readable JSON
 - **Multicall batching** — Factory (13 calls), Pair (31 calls), Vault (4 calls per token) each resolved in a single RPC round trip
+- **Parameter editing** — click any editable field to open a modal; fills in the current on-chain value as the default
+- **Safe batch builder** — staged edits are collected per chain; download as a JSON file ready to import into [app.safe.global](https://app.safe.global)
+- **Collapsible sidebar** — navigate between Factory, Pair, and Vault cards without scrolling; toggle width with the ‹/› button
+
+---
+
+## Safe transaction workflow
+
+1. Load a chain's data.
+2. Click the **edit icon** on any parameter — a modal pre-fills the current value.
+3. Enter the new value and click **Add to batch**. The transaction is staged in the sidebar.
+4. Repeat for any other parameters you want to change (across any contract on the same chain).
+5. Click **Download JSON** next to the chain name. The file is formatted for Gnosis Safe's transaction builder.
+6. Go to the Safe URL for that chain, open **Transaction Builder**, and import the file.
+
+Safe addresses per chain:
+
+| Chain        | Safe                                         | URL                        |
+| ------------ | -------------------------------------------- | -------------------------- |
+| Arbitrum One | `0xc6b1e7F76DfC2eEE534200a0182F136775789142` | [arb1 Safe][safe-arb]      |
+| Base         | `0xf0a20057518FAf9cDA82fA82D795a4F4770e1951` | [base Safe][safe-base]     |
+| BSC          | `0x44b6A0e4CEB9ded60fEE3AcB6D8405241DE0b325` | [bnb Safe][safe-bnb]       |
+
+[safe-arb]: https://app.safe.global/home?safe=arb1:0xc6b1e7F76DfC2eEE534200a0182F136775789142
+[safe-base]: https://app.safe.global/home?safe=base:0xf0a20057518FAf9cDA82fA82D795a4F4770e1951
+[safe-bnb]: https://app.safe.global/home?safe=bnb:0x44b6A0e4CEB9ded60fEE3AcB6D8405241DE0b325
 
 ---
 
@@ -135,6 +167,7 @@ Source: https://app.everything.inc/developers
 | **Factory**        | The master contract that deploys and tracks all Pairs. Named after the Factory design pattern                                                                      |
 | **Pair**           | A liquidity pool contract for two tokens. Also an ERC-20 token itself (the LP token)                                                                               |
 | **Vault**          | Holds idle token reserves and optionally deposits them into Aave to earn yield                                                                                     |
+| **Safe**           | Gnosis Safe — a multisig smart contract wallet used to manage protocol admin transactions                                                                          |
 | **Beacon Proxy**   | An upgradeable contract pattern where the implementation address is stored in a separate Beacon contract rather than in the proxy itself                           |
 | **LP token**       | Liquidity Provider token — an ERC-20 minted to represent a user's share of a liquidity pool                                                                        |
 | **Unix timestamp** | Seconds elapsed since 1 January 1970. Multiply by 1000 to convert to a JavaScript Date                                                                             |
