@@ -4,7 +4,9 @@ import { UniPoolFactoryAbi } from '../../abi/UniPoolFactory';
 import { UniPoolPairAbi } from '../../abi/UniPoolPair';
 import { UniPoolVaultAbi } from '../../abi/UniPoolVault';
 
-export const SAFE_BY_CHAIN: Record<ChainKey, { chainId: string; address: `0x${string}`; url: string }> = {
+export type SafeConfig = { chainId: string; address: `0x${string}`; url: string };
+
+export const SAFE_BY_CHAIN: Partial<Record<ChainKey, SafeConfig>> = {
 	arbitrum: {
 		chainId: '42161',
 		address: '0xc6b1e7F76DfC2eEE534200a0182F136775789142',
@@ -169,6 +171,7 @@ export function buildSafeTransaction(draft: EditDraft, values: Record<string, un
 
 export function buildSafeJson(chainKey: ChainKey, transactions: SafeTransaction[]) {
 	const safe = SAFE_BY_CHAIN[chainKey];
+	if (!safe) throw new Error(`Safe is not configured for ${chainKey}.`);
 	return {
 		chainId: safe.chainId,
 		createdAt: Date.now(),

@@ -58,8 +58,42 @@
 		if (curr === prev) return null;
 		const d = curr - prev;
 		const abs = d < 0n ? -d : d;
-		const fmt = decimals !== undefined ? formatAmount(abs, decimals) : abs.toString();
+		const fmt = decimals !== undefined ? formatCardAmount(abs, decimals) : abs.toString();
 		return { label: d > 0n ? `▲ +${fmt}` : `▼ -${fmt}`, dir: d > 0n ? 'up' : 'down' };
+	}
+
+	function formatCardAmount(value: bigint, decimals: number): string {
+		return compactDecimal(formatAmount(value, decimals));
+	}
+
+	function compactDecimal(raw: string): string {
+		const sign = raw.startsWith('-') ? '-' : '';
+		const unsigned = sign ? raw.slice(1) : raw;
+		const [wholeRaw, fractionRaw = ''] = unsigned.split('.');
+		const whole = wholeRaw || '0';
+		const fraction = fractionRaw.replace(/0+$/, '');
+
+		if (!fraction) return sign + addThousands(whole);
+
+		if (whole !== '0') {
+			const maxFractionDigits = whole.length > 5 ? 0 : whole.length > 2 ? 2 : 4;
+			const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, '');
+			return sign + addThousands(whole) + (trimmed ? `.${trimmed}` : '');
+		}
+
+		const firstSignificant = fraction.search(/[1-9]/);
+		if (firstSignificant === -1) return '0';
+		if (firstSignificant > 8) {
+			const significant = fraction.slice(firstSignificant, firstSignificant + 4).replace(/0+$/, '');
+			return `${sign}${significant[0]}${significant.length > 1 ? `.${significant.slice(1)}` : ''}e-${firstSignificant + 1}`;
+		}
+
+		const visibleFraction = fraction.slice(0, firstSignificant + 4).replace(/0+$/, '');
+		return `${sign}0.${visibleFraction}`;
+	}
+
+	function addThousands(value: string): string {
+		return value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 	}
 
 	// RAY unit (10^27) bigint diff.
@@ -312,7 +346,7 @@
 			<div class="row">
 				<dt data-fn="totalSupply() — Total supply of LP tokens issued to liquidity providers as proof of deposit">LP Token Supply</dt>
 				<dd onmouseenter={(e) => enterSpark('supply', 'LP Token Supply', (p) => Number(p.totalSupply) / 10 ** p.decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.totalSupply, data.decimals)}
+					<span class="amount" title={formatAmount(data.totalSupply, data.decimals)}>{formatCardAmount(data.totalSupply, data.decimals)}</span>
 					{#if prevData}{@const d = bd(data.totalSupply, prevData.totalSupply, data.decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
@@ -325,14 +359,14 @@
 			<div class="row">
 				<dt data-fn="getReserves()[0] — Actual token0 balance held by this Pair">Reserve 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
 				<dd onmouseenter={(e) => enterSpark('r0', `Reserve 0${t0}`, (p) => Number(p.reserve0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.reserve0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}
+					<span class="amount" title={formatAmount(data.reserve0, data.token0Decimals)}>{formatCardAmount(data.reserve0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}</span>
 					{#if prevData}{@const d = bd(data.reserve0, prevData.reserve0, data.token0Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
 				<dt data-fn="getReserves()[1] — Actual token1 balance held by this Pair">Reserve 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
 				<dd onmouseenter={(e) => enterSpark('r1', `Reserve 1${t1}`, (p) => Number(p.reserve1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.reserve1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}
+					<span class="amount" title={formatAmount(data.reserve1, data.token1Decimals)}>{formatCardAmount(data.reserve1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}</span>
 					{#if prevData}{@const d = bd(data.reserve1, prevData.reserve1, data.token1Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
@@ -506,28 +540,28 @@
 			<div class="row">
 				<dt data-fn="getTotalBorrowed0() — Outstanding token0 borrow amount">Total Borrowed 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
 				<dd onmouseenter={(e) => enterSpark('b0', `Total Borrowed 0${t0}`, (p) => Number(p.totalBorrowed0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.totalBorrowed0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}
+					<span class="amount" title={formatAmount(data.totalBorrowed0, data.token0Decimals)}>{formatCardAmount(data.totalBorrowed0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}</span>
 					{#if prevData}{@const d = bd(data.totalBorrowed0, prevData.totalBorrowed0, data.token0Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
 				<dt data-fn="getTotalBorrowed1() — Outstanding token1 borrow amount">Total Borrowed 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
 				<dd onmouseenter={(e) => enterSpark('b1', `Total Borrowed 1${t1}`, (p) => Number(p.totalBorrowed1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.totalBorrowed1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}
+					<span class="amount" title={formatAmount(data.totalBorrowed1, data.token1Decimals)}>{formatCardAmount(data.totalBorrowed1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}</span>
 					{#if prevData}{@const d = bd(data.totalBorrowed1, prevData.totalBorrowed1, data.token1Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
 				<dt data-fn="getAccumulatedPoolFees()[0] — Accumulated token0 pool fees not yet distributed">Pool Fees 0{data.token0Symbol ? ` (${data.token0Symbol})` : ''}</dt>
 				<dd onmouseenter={(e) => enterSpark('f0', `Pool Fees 0${t0}`, (p) => Number(p.accumulatedPoolFees.fee0) / 10 ** p.token0Decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.accumulatedPoolFees.fee0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}
+					<span class="amount" title={formatAmount(data.accumulatedPoolFees.fee0, data.token0Decimals)}>{formatCardAmount(data.accumulatedPoolFees.fee0, data.token0Decimals)}{#if data.token0Symbol}<span class="unit">{data.token0Symbol}</span>{/if}</span>
 					{#if prevData}{@const d = bd(data.accumulatedPoolFees.fee0, prevData.accumulatedPoolFees.fee0, data.token0Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
 			<div class="row">
 				<dt data-fn="getAccumulatedPoolFees()[1] — Accumulated token1 pool fees not yet distributed">Pool Fees 1{data.token1Symbol ? ` (${data.token1Symbol})` : ''}</dt>
 				<dd onmouseenter={(e) => enterSpark('f1', `Pool Fees 1${t1}`, (p) => Number(p.accumulatedPoolFees.fee1) / 10 ** p.token1Decimals, e)} onmouseleave={leaveSpark}>
-					{formatAmount(data.accumulatedPoolFees.fee1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}
+					<span class="amount" title={formatAmount(data.accumulatedPoolFees.fee1, data.token1Decimals)}>{formatCardAmount(data.accumulatedPoolFees.fee1, data.token1Decimals)}{#if data.token1Symbol}<span class="unit">{data.token1Symbol}</span>{/if}</span>
 					{#if prevData}{@const d = bd(data.accumulatedPoolFees.fee1, prevData.accumulatedPoolFees.fee1, data.token1Decimals)}{#if d}<span class="diff {d.dir}">{d.label}</span>{/if}{/if}
 				</dd>
 			</div>
@@ -719,33 +753,35 @@
 <style>
 	.pair-card {
 		border: 1px solid #e2e8f0;
-		border-radius: 12px;
-		padding: 1.25rem;
+		border-radius: 8px;
+		padding: 0.85rem;
 		background: #f8fafc;
+		min-width: 0;
+		box-sizing: border-box;
 	}
 	.pair-header {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		margin-bottom: 1rem;
-		padding-bottom: 0.5rem;
+		margin-bottom: 0.65rem;
+		padding-bottom: 0.4rem;
 		border-bottom: 1px solid #e2e8f0;
 	}
 	.pair-header h3 {
-		font-size: 0.9rem;
+		font-size: 0.82rem;
 		font-weight: 600;
 		margin: 0 0 2px;
 	}
 	.pair-address {
-		font-size: 0.75rem;
+		font-size: 0.68rem;
 		font-family: monospace;
 		color: #94a3b8;
 	}
 	section {
-		margin-bottom: 0.75rem;
+		margin-bottom: 0.55rem;
 	}
 	h4 {
-		font-size: 0.7rem;
+		font-size: 0.64rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -759,20 +795,21 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.25rem 0;
+		padding: 0.15rem 0;
 		border-bottom: 1px solid #f1f5f9;
 	}
 	.row:last-child {
 		border-bottom: none;
 	}
 	dt {
-		font-size: 0.75rem;
+		font-size: 0.67rem;
 		color: #64748b;
 		flex-shrink: 0;
 	}
 	dd {
-		font-size: 0.75rem;
+		font-size: 0.67rem;
 		font-family: monospace;
+		font-variant-numeric: tabular-nums;
 		font-weight: 500;
 		margin: 0;
 		color: #0f172a;
@@ -784,6 +821,14 @@
 		flex: 1;
 		min-width: 0;
 		text-align: right;
+		overflow-wrap: anywhere;
+	}
+
+	.amount {
+		display: inline-flex;
+		align-items: baseline;
+		justify-content: flex-end;
+		white-space: nowrap;
 	}
 
 	.copy-btn {

@@ -87,7 +87,7 @@ html = html.replace('data-sveltekit-preload-data="hover"', 'data-sveltekit-prelo
 // Patch file:// incompatibilities (history API + fetch intercept)
 html = html.replace(
 	'</head>',
-	`<script>if(location.protocol==='file:'){var _noop=function(){};history.replaceState=_noop;history.pushState=_noop;var _fetch=window.fetch;window.fetch=function(r,o){var u=typeof r==='string'?r:r instanceof Request?r.url:String(r);return(u.startsWith('http://')||u.startsWith('https://'))?_fetch.call(this,r,o):Promise.resolve(new Response('{}',{status:200,headers:{'Content-Type':'application/json'}}));};}</script>\n</head>`
+	`<script>if(location.protocol==='file:'){var _noop=function(){};history.replaceState=_noop;history.pushState=_noop;var _fetch=window.fetch;window.fetch=function(r,o){var u=typeof r==='string'?r:r instanceof Request?r.url:String(r);if(u.startsWith('http://')||u.startsWith('https://'))return _fetch.call(this,r,o);return Promise.resolve(new Response('',{status:404}));};}</script>\n</head>`
 );
 
 // Replace SvelteKit init block with inlined bundle

@@ -234,34 +234,35 @@
 <style>
 	.card {
 		border: 1px solid #e2e8f0;
-		border-radius: 12px;
-		padding: 1.25rem;
+		border-radius: 8px;
+		padding: 0.85rem;
 		background: #fff;
-		min-width: 280px;
+		min-width: 0;
+		box-sizing: border-box;
 	}
 	.card-header {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		margin-bottom: 1rem;
-		padding-bottom: 0.5rem;
+		margin-bottom: 0.65rem;
+		padding-bottom: 0.4rem;
 		border-bottom: 1px solid #e2e8f0;
 	}
 	.card-header h2 {
-		font-size: 1rem;
+		font-size: 0.9rem;
 		font-weight: 600;
 		margin: 0 0 2px;
 	}
 	.addr {
-		font-size: 0.75rem;
+		font-size: 0.68rem;
 		font-family: monospace;
 		color: #94a3b8;
 	}
 	section {
-		margin-bottom: 1rem;
+		margin-bottom: 0.65rem;
 	}
 	h3 {
-		font-size: 0.75rem;
+		font-size: 0.68rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -272,7 +273,7 @@
 		gap: 4px;
 	}
 	h4 {
-		font-size: 0.7rem;
+		font-size: 0.65rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -283,27 +284,27 @@
 		margin: 0;
 	}
 	.sub-section {
-		margin-top: 0.5rem;
-		padding-top: 0.5rem;
+		margin-top: 0.35rem;
+		padding-top: 0.35rem;
 		border-top: 1px dashed #e2e8f0;
 	}
 	.row {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.25rem 0;
+		padding: 0.16rem 0;
 		border-bottom: 1px solid #f1f5f9;
 	}
 	.row:last-child {
 		border-bottom: none;
 	}
 	dt {
-		font-size: 0.75rem;
+		font-size: 0.68rem;
 		color: #64748b;
 		flex-shrink: 0;
 	}
 	dd {
-		font-size: 0.75rem;
+		font-size: 0.68rem;
 		font-family: monospace;
 		font-weight: 500;
 		margin: 0;
@@ -316,6 +317,7 @@
 		flex: 1;
 		min-width: 0;
 		text-align: right;
+		word-break: break-all;
 	}
 	.badge-green {
 		color: #16a34a;

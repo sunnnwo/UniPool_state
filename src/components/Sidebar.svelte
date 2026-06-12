@@ -34,7 +34,9 @@
 
 <nav class="sidebar" class:collapsed>
   <div class="sidebar-header">
-    {#if !collapsed}<span class="sidebar-title">Menu</span>{/if}
+    <a class="brand-lockup" href="https://app.everything.inc/" target="_blank" rel="noreferrer" title="Everything.">
+      <img class="brand-logo" src="./everything-white-logo.svg" alt="Everything. logo" />
+    </a>
     <button class="collapse-btn" onclick={() => (collapsed = !collapsed)} title={collapsed ? '사이드바 열기' : '사이드바 닫기'}>
       {collapsed ? '›' : '‹'}
     </button>
@@ -203,6 +205,8 @@
   }
 
   .sidebar.collapsed .sidebar-header {
+    flex-direction: column;
+    gap: 0.5rem;
     padding: 0 0 0.75rem;
     justify-content: center;
   }
@@ -237,12 +241,26 @@
     margin-bottom: 0.5rem;
   }
 
-  .sidebar-title {
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #64748b;
+  .brand-lockup {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .brand-logo {
+    width: 121px;
+    height: 20px;
+    object-fit: contain;
+    object-position: left center;
+    flex-shrink: 0;
+  }
+
+  .sidebar.collapsed .brand-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
   }
 
   .nav-item {
