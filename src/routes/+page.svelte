@@ -69,7 +69,7 @@
 		>
 	);
 	let chainCollapsed = $state<Record<ChainKey, boolean>>(
-		Object.fromEntries(Object.keys(CHAINS).map((key) => [key, false])) as unknown as Record<
+		Object.fromEntries(Object.keys(CHAINS).map((key) => [key, true])) as unknown as Record<
 			ChainKey,
 			boolean
 		>
