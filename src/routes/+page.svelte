@@ -68,6 +68,12 @@
 			SafeTransaction[]
 		>
 	);
+	let chainCollapsed = $state<Record<ChainKey, boolean>>(
+		Object.fromEntries(Object.keys(CHAINS).map((key) => [key, false])) as unknown as Record<
+			ChainKey,
+			boolean
+		>
+	);
 	let activeEdit = $state<EditDraft | null>(null);
 	let editValues = $state<Record<string, string>>({});
 	let editError = $state<string | null>(null);
@@ -125,6 +131,10 @@
 		a.download = `unipool-${chainKey}-safe-transactions.json`;
 		a.click();
 		URL.revokeObjectURL(url);
+	}
+
+	function toggleChainCollapsed(chainKey: ChainKey) {
+		chainCollapsed[chainKey] = !chainCollapsed[chainKey];
 	}
 
 	// 검색어가 체인 공통 주소에 걸리는지 확인합니다.
@@ -426,7 +436,18 @@
 			{@const safeConfig = SAFE_BY_CHAIN[key as ChainKey]}
 			<div class="chain-col">
 				<div class="chain-header">
-					<span class="chain-name">{config.name}</span>
+					<button
+						class="chain-toggle"
+						aria-expanded={!chainCollapsed[key as ChainKey]}
+						aria-label={`${chainCollapsed[key as ChainKey] ? 'Expand' : 'Collapse'} ${config.name}`}
+						title={chainCollapsed[key as ChainKey] ? 'Expand chain' : 'Collapse chain'}
+						onclick={() => toggleChainCollapsed(key as ChainKey)}
+					>
+						<span class="toggle-icon" aria-hidden="true">
+							{chainCollapsed[key as ChainKey] ? '▸' : '▾'}
+						</span>
+						<span class="chain-name">{config.name}</span>
+					</button>
 					<div class="chain-actions">
 						{#if safeConfig}
 							<a class="safe-link" href={safeConfig.url} target="_blank" rel="noreferrer">Safe</a>
@@ -453,96 +474,100 @@
 					</div>
 				</div>
 
-				{#if states[key as ChainKey].historyError}
-					<p class="history-error">{states[key as ChainKey].historyError}</p>
-				{/if}
-
-				{#if states[key as ChainKey].loading}
-					<p class="state-msg">Loading...</p>
-				{:else if states[key as ChainKey].error}
-					<p class="state-msg error">{states[key as ChainKey].error}</p>
-				{:else if chainHasMatch(config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault, states[key as ChainKey].pairs)}
-					{@const anySelected =
-						sidebarStore.selectedCount > 0 ||
-						sidebarStore.selectedFactoryCount > 0 ||
-						sidebarStore.selectedVaultCount > 0}
-
-					<div class="top-cards">
-						{#if (!anySelected || sidebarStore.selectedFactoryCount > 0) && (sidebarStore.selectedFactoryCount === 0 || sidebarStore.isFactorySelected(key as ChainKey))}
-							<FactoryCard
-								chainLabel={config.name}
-								data={states[key as ChainKey].factory}
-								prevData={null}
-								loading={false}
-								error={null}
-								chainKey={key as ChainKey}
-								factoryAddress={config.factory}
-								pairAddresses={states[key as ChainKey].pairs.map((p) => p.address)}
-								defaultPairAddresses={states[key as ChainKey].pairs
-									.filter((p) => sidebarStore.isSelected(p.address))
-									.map((p) => p.address)}
-								onEdit={openEdit}
-							/>
+				{#if !chainCollapsed[key as ChainKey]}
+					<div class="chain-body">
+						{#if states[key as ChainKey].historyError}
+							<p class="history-error">{states[key as ChainKey].historyError}</p>
 						{/if}
 
-						{#if (!anySelected || sidebarStore.selectedVaultCount > 0) && states[key as ChainKey].vault && (sidebarStore.selectedVaultCount === 0 || sidebarStore.isVaultSelected(key as ChainKey))}
-							{@const symMap = Object.fromEntries(
-								states[key as ChainKey].pairs
-									.flatMap((p) => [
-										[p.token0.toLowerCase(), p.token0Symbol],
-										[p.token1.toLowerCase(), p.token1Symbol]
-									])
-									.filter(([, s]) => s)
-							)}
-							<VaultCard
-								data={states[key as ChainKey].vault!}
-								prevData={null}
-								tokenSymbols={symMap}
-								chainKey={key as ChainKey}
-								chainLabel={config.name}
-								onEdit={openEdit}
-							/>
-						{/if}
-					</div>
+						{#if states[key as ChainKey].loading}
+							<p class="state-msg">Loading...</p>
+						{:else if states[key as ChainKey].error}
+							<p class="state-msg error">{states[key as ChainKey].error}</p>
+						{:else if chainHasMatch(config.factory, states[key as ChainKey].factory, states[key as ChainKey].vault, states[key as ChainKey].pairs)}
+							{@const anySelected =
+								sidebarStore.selectedCount > 0 ||
+								sidebarStore.selectedFactoryCount > 0 ||
+								sidebarStore.selectedVaultCount > 0}
 
-					{#if (!anySelected || sidebarStore.selectedCount > 0) && states[key as ChainKey].pairs.length > 0}
-						{@const filtered = filterPairs(
-							states[key as ChainKey].pairs,
-							config.factory,
-							states[key as ChainKey].factory,
-							states[key as ChainKey].vault
-						)}
-						{@const visible =
-							sidebarStore.selectedCount > 0
-								? filtered.filter((p) => sidebarStore.isSelected(p.address))
-								: filtered}
-						<div class="pairs-label">
-							Pairs ({visible.length} / {states[key as ChainKey].pairs.length})
-						</div>
-						<div class="pairs-grid">
-							{#each visible as pair (pair.address)}
-								{@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
-								<PairCard
-									data={pair}
-									prevData={null}
-									history={pairHistory}
-									chainLabel={config.name}
-									chainKey={key as ChainKey}
-									onEdit={openEdit}
-								/>
-							{/each}
-						</div>
-					{/if}
-				{/if}
+							<div class="top-cards">
+								{#if (!anySelected || sidebarStore.selectedFactoryCount > 0) && (sidebarStore.selectedFactoryCount === 0 || sidebarStore.isFactorySelected(key as ChainKey))}
+									<FactoryCard
+										chainLabel={config.name}
+										data={states[key as ChainKey].factory}
+										prevData={null}
+										loading={false}
+										error={null}
+										chainKey={key as ChainKey}
+										factoryAddress={config.factory}
+										pairAddresses={states[key as ChainKey].pairs.map((p) => p.address)}
+										defaultPairAddresses={states[key as ChainKey].pairs
+											.filter((p) => sidebarStore.isSelected(p.address))
+											.map((p) => p.address)}
+										onEdit={openEdit}
+									/>
+								{/if}
 
-				{#if safeBatches[key as ChainKey].length > 0}
-					<div class="safe-batch">
-						{#each safeBatches[key as ChainKey] as tx, i}
-							<div class="safe-tx">
-								<span>{i + 1}. {tx.contractMethod.name}</span>
-								<button onclick={() => removeSafeTx(key as ChainKey, i)}>✕</button>
+								{#if (!anySelected || sidebarStore.selectedVaultCount > 0) && states[key as ChainKey].vault && (sidebarStore.selectedVaultCount === 0 || sidebarStore.isVaultSelected(key as ChainKey))}
+									{@const symMap = Object.fromEntries(
+										states[key as ChainKey].pairs
+											.flatMap((p) => [
+												[p.token0.toLowerCase(), p.token0Symbol],
+												[p.token1.toLowerCase(), p.token1Symbol]
+											])
+											.filter(([, s]) => s)
+									)}
+									<VaultCard
+										data={states[key as ChainKey].vault!}
+										prevData={null}
+										tokenSymbols={symMap}
+										chainKey={key as ChainKey}
+										chainLabel={config.name}
+										onEdit={openEdit}
+									/>
+								{/if}
 							</div>
-						{/each}
+
+							{#if (!anySelected || sidebarStore.selectedCount > 0) && states[key as ChainKey].pairs.length > 0}
+								{@const filtered = filterPairs(
+									states[key as ChainKey].pairs,
+									config.factory,
+									states[key as ChainKey].factory,
+									states[key as ChainKey].vault
+								)}
+								{@const visible =
+									sidebarStore.selectedCount > 0
+										? filtered.filter((p) => sidebarStore.isSelected(p.address))
+										: filtered}
+								<div class="pairs-label">
+									Pairs ({visible.length} / {states[key as ChainKey].pairs.length})
+								</div>
+								<div class="pairs-grid">
+									{#each visible as pair (pair.address)}
+										{@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
+										<PairCard
+											data={pair}
+											prevData={null}
+											history={pairHistory}
+											chainLabel={config.name}
+											chainKey={key as ChainKey}
+											onEdit={openEdit}
+										/>
+									{/each}
+								</div>
+							{/if}
+						{/if}
+
+						{#if safeBatches[key as ChainKey].length > 0}
+							<div class="safe-batch">
+								{#each safeBatches[key as ChainKey] as tx, i}
+									<div class="safe-tx">
+										<span>{i + 1}. {tx.contractMethod.name}</span>
+										<button onclick={() => removeSafeTx(key as ChainKey, i)}>✕</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -711,16 +736,48 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 0.75rem;
+	}
+	.chain-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-width: 0;
+		border: none;
+		background: transparent;
+		padding: 0.15rem 0.1rem;
+		color: #475569;
+	}
+	.chain-toggle:hover {
+		background: transparent;
+		color: #0f172a;
+	}
+	.toggle-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1rem;
+		color: #94a3b8;
+		font-size: 0.8rem;
+		line-height: 1;
 	}
 	.chain-actions {
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 	.chain-name {
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: #475569;
+		white-space: nowrap;
+	}
+	.chain-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
 	}
 	.safe-link,
 	.download-btn {

@@ -7,6 +7,11 @@ import { UniPoolVaultAbi } from '../../abi/UniPoolVault';
 export type SafeConfig = { chainId: string; address: `0x${string}`; url: string };
 
 export const SAFE_BY_CHAIN: Partial<Record<ChainKey, SafeConfig>> = {
+	ethereum: {
+		chainId: '1',
+		address: '0x1E3e1128F6bC2264a19D7a065982696d356879c5',
+		url: 'https://app.safe.global/home?safe=eth:0x1E3e1128F6bC2264a19D7a065982696d356879c5'
+	},
 	arbitrum: {
 		chainId: '42161',
 		address: '0xc6b1e7F76DfC2eEE534200a0182F136775789142',
