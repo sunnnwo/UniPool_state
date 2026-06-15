@@ -25,6 +25,6 @@
   .page-content {
     flex: 1;
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: visible;
   }
 </style>

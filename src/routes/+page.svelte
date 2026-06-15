@@ -2,6 +2,7 @@
 	// 루트 페이지입니다. 체인별 Factory/Pair/Vault 조회, 검색/필터링,
 	// 날짜 기준 조회, Safe JSON 배치 생성을 한 화면에서 조율합니다.
 
+	import { onMount } from 'svelte';
 	import { CHAINS } from '../config/chains';
 	import type { ChainKey } from '../config/chains';
 	import { fetchFactoryData } from '../config/fetchFactory';
@@ -86,6 +87,8 @@
 
 	// 검색 비교용 정규화 값입니다. 공백 제거 + 소문자 변환.
 	const normalizedQuery = $derived(searchQuery.trim().toLowerCase());
+	const chainKeys = Object.keys(CHAINS) as ChainKey[];
+	let activeNavChain = $state<ChainKey>('ethereum');
 
 	// 사용자가 카드의 Edit 버튼을 눌렀을 때 호출됩니다.
 	// 어떤 값을 수정할지 담긴 draft를 activeEdit에 넣어 모달을 열고,
@@ -146,6 +149,61 @@
 	function togglePairsCollapsed(chainKey: ChainKey) {
 		pairsCollapsed[chainKey] = !pairsCollapsed[chainKey];
 	}
+
+	function scrollToAnchor(anchorId: string) {
+		requestAnimationFrame(() => {
+			const target = document.getElementById(anchorId);
+			if (!target) return;
+			const top = target.getBoundingClientRect().top + window.scrollY - 72;
+			window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+		});
+	}
+
+	function scrollToChain(chainKey: ChainKey) {
+		activeNavChain = chainKey;
+		scrollToAnchor(`chain-${chainKey}`);
+	}
+
+	function chainNavLabel(chainKey: ChainKey) {
+		return chainKey === 'bsc' ? 'BNB' : CHAINS[chainKey].name;
+	}
+
+	function chainNavColor(chainKey: ChainKey) {
+		if (chainKey === 'ethereum') return '#627eea';
+		if (chainKey === 'arbitrum') return '#28a0f0';
+		if (chainKey === 'base') return '#0052ff';
+		return '#f0b90b';
+	}
+
+	function updateActiveNavChain() {
+		if (typeof window === 'undefined') return;
+
+		let current = chainKeys[0];
+		const markerY = Math.min(Math.max(window.innerHeight * 0.28, 140), 260);
+
+		for (const key of chainKeys) {
+			const chainEl = document.getElementById(`chain-${key}`);
+			if (!chainEl) continue;
+
+			const rangeEl = chainEl.querySelector('.chain-body') ?? chainEl;
+			const rect = rangeEl.getBoundingClientRect();
+			if (rect.top <= markerY && rect.bottom > markerY) {
+				current = key;
+				break;
+			}
+		}
+		activeNavChain = current;
+	}
+
+	onMount(() => {
+		updateActiveNavChain();
+		window.addEventListener('scroll', updateActiveNavChain, { passive: true });
+		window.addEventListener('resize', updateActiveNavChain);
+		return () => {
+			window.removeEventListener('scroll', updateActiveNavChain);
+			window.removeEventListener('resize', updateActiveNavChain);
+		};
+	});
 
 	// 검색어가 체인 공통 주소에 걸리는지 확인합니다.
 	// Factory 주소, feeCollector, beacon, vault, aavePool, Vault 토큰 주소처럼
@@ -441,10 +499,24 @@
 		{/if}
 	</div>
 
+	<nav class="chain-nav" aria-label="Chain quick navigation">
+		{#each chainKeys as chainKey}
+			<button
+				class="chain-nav-btn"
+				class:active={activeNavChain === chainKey}
+				style={`--chain-accent: ${chainNavColor(chainKey)}`}
+				onclick={() => scrollToChain(chainKey)}
+			>
+				<span class="chain-dot" aria-hidden="true"></span>
+				<span>{chainNavLabel(chainKey)}</span>
+			</button>
+		{/each}
+	</nav>
+
 	<div class="chains">
 		{#each Object.entries(CHAINS) as [key, config] (key)}
 			{@const safeConfig = SAFE_BY_CHAIN[key as ChainKey]}
-			<div class="chain-col">
+			<div class="chain-col" id={`chain-${key}`}>
 				<div class="chain-header">
 					<button
 						class="chain-toggle"
@@ -748,6 +820,75 @@
 		gap: 1rem;
 		align-items: start;
 	}
+	.chain-nav {
+		position: sticky;
+		top: 0;
+		z-index: 30;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: -0.35rem 0 1rem;
+		padding: 0.45rem;
+		border: 1px solid rgba(148, 163, 184, 0.32);
+		border-radius: 10px;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
+			#ffffff;
+		box-shadow:
+			0 10px 26px rgba(15, 23, 42, 0.08),
+			inset 0 1px 0 rgba(255, 255, 255, 0.85);
+		backdrop-filter: blur(12px);
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.chain-nav::-webkit-scrollbar {
+		display: none;
+	}
+	.chain-nav-btn {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 2rem;
+		border-color: transparent;
+		border-radius: 8px;
+		background: transparent;
+		color: #64748b;
+		font-size: 0.78rem;
+		font-weight: 650;
+		letter-spacing: 0;
+		padding: 0.38rem 0.72rem;
+		white-space: nowrap;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease,
+			box-shadow 0.15s ease,
+			transform 0.15s ease;
+	}
+	.chain-nav-btn:hover {
+		border-color: rgba(148, 163, 184, 0.28);
+		background: rgba(241, 245, 249, 0.82);
+		color: #0f172a;
+	}
+	.chain-nav-btn:active {
+		transform: translateY(1px);
+	}
+	.chain-nav-btn.active {
+		border-color: color-mix(in srgb, var(--chain-accent) 32%, #cbd5e1);
+		background: color-mix(in srgb, var(--chain-accent) 10%, #ffffff);
+		color: #0f172a;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.08),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+	}
+	.chain-dot {
+		width: 0.48rem;
+		height: 0.48rem;
+		border-radius: 999px;
+		background: var(--chain-accent);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--chain-accent) 16%, transparent);
+	}
 	.chain-col {
 		display: flex;
 		flex-direction: column;
@@ -758,6 +899,9 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
+		padding: 0.25rem;
+		border-bottom: 1px solid #e2e8f0;
+		background: rgba(255, 255, 255, 0.96);
 	}
 	.chain-toggle {
 		display: inline-flex;
