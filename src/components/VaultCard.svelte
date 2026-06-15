@@ -18,7 +18,8 @@
 		tokenSymbols = {},
 		chainKey = undefined,
 		chainLabel = '',
-		onEdit = undefined
+		onEdit = undefined,
+		expandSignal = 0
 	}: {
 		data: VaultData;
 		prevData?: VaultData | null;
@@ -26,6 +27,7 @@
 		chainKey?: ChainKey;
 		chainLabel?: string;
 		onEdit?: (draft: EditDraft) => void;
+		expandSignal?: number;
 	} = $props();
 
 	// Returns diff badge info for two bigint values.
@@ -51,6 +53,10 @@
 	let dtTipX = $state(0);
 	let dtTipY = $state(0);
 	let dtTipVisible = $state(false);
+
+	$effect(() => {
+		if (expandSignal > 0) collapsed = false;
+	});
 
 	function shortenAddress(addr: string | undefined): string {
 		if (!addr) return '—';

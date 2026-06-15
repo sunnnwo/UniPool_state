@@ -84,6 +84,7 @@
 	let activeEdit = $state<EditDraft | null>(null);
 	let editValues = $state<Record<string, string>>({});
 	let editError = $state<string | null>(null);
+	let expandAllSignal = $state(0);
 
 	// 검색 비교용 정규화 값입니다. 공백 제거 + 소문자 변환.
 	const normalizedQuery = $derived(searchQuery.trim().toLowerCase());
@@ -399,8 +400,13 @@
 	// 모든 체인의 최신 데이터를 한 번에 로딩합니다.
 	// 각 체인끼리는 서로 의존하지 않기 때문에 Promise.all로 동시에 시작합니다.
 	// 반환값은 Promise라서 버튼 클릭이나 다른 async 흐름에서 await할 수 있습니다.
-	function loadAll() {
-		return Promise.all((Object.keys(CHAINS) as ChainKey[]).map(loadChain));
+	async function loadAll() {
+		expandAllSignal += 1;
+		for (const key of chainKeys) {
+			chainCollapsed[key] = false;
+			pairsCollapsed[key] = false;
+		}
+		await Promise.all(chainKeys.map(loadChain));
 	}
 
 	// 선택한 체인의 최근 7일 히스토리를 로딩합니다.
@@ -606,6 +612,7 @@
 										chainKey={key as ChainKey}
 										chainLabel={config.name}
 										onEdit={openEdit}
+										expandSignal={expandAllSignal}
 									/>
 								{/if}
 							</div>
