@@ -763,11 +763,15 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
+		flex: 1;
+		align-self: stretch;
+		justify-content: flex-start;
 		min-width: 0;
 		border: none;
 		background: transparent;
-		padding: 0.15rem 0.1rem;
+		padding: 0.35rem 0.1rem;
 		color: #475569;
+		cursor: pointer;
 	}
 	.chain-toggle:hover {
 		background: transparent;
@@ -788,6 +792,7 @@
 		gap: 0.4rem;
 		flex-wrap: wrap;
 		justify-content: flex-end;
+		flex-shrink: 0;
 	}
 	.chain-name {
 		font-size: 0.85rem;
