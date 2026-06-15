@@ -44,10 +44,12 @@ cp .env.example .env
 Open `.env` and fill in your Alchemy API key:
 
 ```bash
+VITE_RPC_ETHEREUM=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 VITE_RPC_ARBITRUM=https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY
 VITE_RPC_BASE=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 VITE_RPC_BSC=https://bsc-dataseed.binance.org
 
+VITE_FACTORY_ETHEREUM=0xaCb586186f72D7bB7fA68ffe53e88bbcdcCD60e4
 VITE_FACTORY_ARBITRUM=0xa88216E6Cf409a25c719234C4817628Ae406b6A7
 VITE_FACTORY_BASE=0xC264944E9E7073F8F98fEf7338Cda973914FcA44
 VITE_FACTORY_BSC=0xabD8DC06559634e59F6698c33A5E65e90e917b91
@@ -130,11 +132,11 @@ src/
 
 Safe addresses per chain:
 
-| Chain        | Safe                                         | URL                        |
-| ------------ | -------------------------------------------- | -------------------------- |
-| Arbitrum One | `0xc6b1e7F76DfC2eEE534200a0182F136775789142` | [arb1 Safe][safe-arb]      |
-| Base         | `0xf0a20057518FAf9cDA82fA82D795a4F4770e1951` | [base Safe][safe-base]     |
-| BSC          | `0x44b6A0e4CEB9ded60fEE3AcB6D8405241DE0b325` | [bnb Safe][safe-bnb]       |
+| Chain        | Safe                                         | URL                    |
+| ------------ | -------------------------------------------- | ---------------------- |
+| Arbitrum One | `0xc6b1e7F76DfC2eEE534200a0182F136775789142` | [arb1 Safe][safe-arb]  |
+| Base         | `0xf0a20057518FAf9cDA82fA82D795a4F4770e1951` | [base Safe][safe-base] |
+| BSC          | `0x44b6A0e4CEB9ded60fEE3AcB6D8405241DE0b325` | [bnb Safe][safe-bnb]   |
 
 [safe-arb]: https://app.safe.global/home?safe=arb1:0xc6b1e7F76DfC2eEE534200a0182F136775789142
 [safe-base]: https://app.safe.global/home?safe=base:0xf0a20057518FAf9cDA82fA82D795a4F4770e1951
