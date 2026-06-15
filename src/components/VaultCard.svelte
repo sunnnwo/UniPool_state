@@ -45,6 +45,7 @@
 
 	// $state: copy feedback state. Stores the key of the most recently clicked button.
 	let copied = $state<string | null>(null);
+	let collapsed = $state(true);
 
 	let dtTipText = $state('');
 	let dtTipX = $state(0);
@@ -107,7 +108,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="card" onmousemove={(e) => {
+<div class="card" class:collapsed onmousemove={(e) => {
 	const dt = (e.target as Element)?.closest?.('dt') as HTMLElement | null;
 	if (dt?.dataset.fn) {
 		dtTipText = dt.dataset.fn;
@@ -117,52 +118,62 @@
 	} else { dtTipVisible = false; }
 }} onmouseleave={() => { dtTipVisible = false; }}>
 	<div class="card-header">
-		<div>
-			<h2>Vault</h2>
-			<span class="addr" title={data.address}>{shortenAddress(data.address)}</span>
-		</div>
+		<button
+			class="card-toggle"
+			aria-expanded={!collapsed}
+			aria-label={`${collapsed ? 'Expand' : 'Collapse'} Vault`}
+			title={collapsed ? 'Expand vault' : 'Collapse vault'}
+			onclick={() => (collapsed = !collapsed)}
+		>
+			<span class="toggle-icon" aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+			<div>
+				<h2>Vault</h2>
+				<span class="addr" title={data.address}>{shortenAddress(data.address)}</span>
+			</div>
+		</button>
 		<button class="copy-btn" onclick={copyAll}>
 			{copied === '__all__' ? '✓ Copied' : 'Copy all'}
 		</button>
 	</div>
 
-	<section>
-		<h3>Addresses</h3>
-		<dl>
-			<div class="row">
-				<dt data-fn="getFactory() — Factory contract that deployed this vault">Factory</dt>
-				<dd>
-					<span title={data.factory}>{shortenAddress(data.factory)}</span>
-					<button class="copy-icon" onclick={() => copy('factory', data.factory)}
-						>{copied === 'factory' ? '✓' : '⎘'}</button
-					>
-				</dd>
-			</div>
-			<div class="row">
-				<dt data-fn="getAavePool() — Aave lending pool address where idle funds are deposited">Aave Pool</dt>
-				<dd>
-					<span title={data.aavePool}>{shortenAddress(data.aavePool)}</span>
-					<button class="copy-icon" onclick={() => copy('aave', data.aavePool)}
-						>{copied === 'aave' ? '✓' : '⎘'}</button
-					>
-				</dd>
-			</div>
-		</dl>
-	</section>
-
-	<!-- per-token sections -->
-	{#each data.tokens as t, i (t.token)}
-		{@const pt = prevData?.tokens[i] ?? null}
-		{@const sym = tokenSymbols[t.token.toLowerCase()] ?? ''}
+	{#if !collapsed}
 		<section>
-			<h3>
-				{sym ? `${sym} —` : `Token ${i} —`}
-				<span title={t.token}>{shortenAddress(t.token)}</span>
-				<button class="copy-icon" onclick={() => copy('token' + i, t.token)}
-					>{copied === 'token' + i ? '✓' : '⎘'}</button
-				>
-			</h3>
+			<h3>Addresses</h3>
 			<dl>
+				<div class="row">
+					<dt data-fn="getFactory() — Factory contract that deployed this vault">Factory</dt>
+					<dd>
+						<span title={data.factory}>{shortenAddress(data.factory)}</span>
+						<button class="copy-icon" onclick={() => copy('factory', data.factory)}
+							>{copied === 'factory' ? '✓' : '⎘'}</button
+						>
+					</dd>
+				</div>
+				<div class="row">
+					<dt data-fn="getAavePool() — Aave lending pool address where idle funds are deposited">Aave Pool</dt>
+					<dd>
+						<span title={data.aavePool}>{shortenAddress(data.aavePool)}</span>
+						<button class="copy-icon" onclick={() => copy('aave', data.aavePool)}
+							>{copied === 'aave' ? '✓' : '⎘'}</button
+						>
+					</dd>
+				</div>
+			</dl>
+		</section>
+
+		<!-- per-token sections -->
+		{#each data.tokens as t, i (t.token)}
+			{@const pt = prevData?.tokens[i] ?? null}
+			{@const sym = tokenSymbols[t.token.toLowerCase()] ?? ''}
+			<section>
+				<h3>
+					{sym ? `${sym} —` : `Token ${i} —`}
+					<span title={t.token}>{shortenAddress(t.token)}</span>
+					<button class="copy-icon" onclick={() => copy('token' + i, t.token)}
+						>{copied === 'token' + i ? '✓' : '⎘'}</button
+					>
+				</h3>
+				<dl>
 				<div class="row">
 					<dt data-fn="getAssetStatus() — true = token held in vault (not deposited to Aave); false = deposited to Aave earning yield">Is Idle</dt>
 					<dd class:badge-green={!t.isIdle} class:badge-gray={t.isIdle}>
@@ -223,8 +234,9 @@
 					</div>
 				</dl>
 			</div>
-		</section>
-	{/each}
+			</section>
+		{/each}
+	{/if}
 </div>
 
 {#if dtTipVisible && dtTipText}
@@ -252,6 +264,28 @@
 		font-size: 0.9rem;
 		font-weight: 600;
 		margin: 0 0 2px;
+	}
+	.card.collapsed .card-header {
+		margin-bottom: 0;
+		padding-bottom: 0;
+		border-bottom: none;
+	}
+	.card-toggle {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.35rem;
+		min-width: 0;
+		padding: 0;
+		border: none;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.toggle-icon {
+		width: 0.75rem;
+		color: #64748b;
+		line-height: 1rem;
 	}
 	.addr {
 		font-size: 0.68rem;

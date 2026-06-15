@@ -74,6 +74,12 @@
 			boolean
 		>
 	);
+	let pairsCollapsed = $state<Record<ChainKey, boolean>>(
+		Object.fromEntries(Object.keys(CHAINS).map((key) => [key, true])) as unknown as Record<
+			ChainKey,
+			boolean
+		>
+	);
 	let activeEdit = $state<EditDraft | null>(null);
 	let editValues = $state<Record<string, string>>({});
 	let editError = $state<string | null>(null);
@@ -135,6 +141,10 @@
 
 	function toggleChainCollapsed(chainKey: ChainKey) {
 		chainCollapsed[chainKey] = !chainCollapsed[chainKey];
+	}
+
+	function togglePairsCollapsed(chainKey: ChainKey) {
+		pairsCollapsed[chainKey] = !pairsCollapsed[chainKey];
 	}
 
 	// 검색어가 체인 공통 주소에 걸리는지 확인합니다.
@@ -539,22 +549,33 @@
 									sidebarStore.selectedCount > 0
 										? filtered.filter((p) => sidebarStore.isSelected(p.address))
 										: filtered}
-								<div class="pairs-label">
-									Pairs ({visible.length} / {states[key as ChainKey].pairs.length})
-								</div>
-								<div class="pairs-grid">
-									{#each visible as pair (pair.address)}
-										{@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
-										<PairCard
-											data={pair}
-											prevData={null}
-											history={pairHistory}
-											chainLabel={config.name}
-											chainKey={key as ChainKey}
-											onEdit={openEdit}
-										/>
-									{/each}
-								</div>
+								<button
+									class="pairs-label"
+									aria-expanded={!pairsCollapsed[key as ChainKey]}
+									aria-label={`${pairsCollapsed[key as ChainKey] ? 'Expand' : 'Collapse'} pairs for ${config.name}`}
+									title={pairsCollapsed[key as ChainKey] ? 'Expand pairs' : 'Collapse pairs'}
+									onclick={() => togglePairsCollapsed(key as ChainKey)}
+								>
+									<span class="toggle-icon" aria-hidden="true">
+										{pairsCollapsed[key as ChainKey] ? '▸' : '▾'}
+									</span>
+									<span>Pairs ({visible.length} / {states[key as ChainKey].pairs.length})</span>
+								</button>
+								{#if !pairsCollapsed[key as ChainKey]}
+									<div class="pairs-grid">
+										{#each visible as pair (pair.address)}
+											{@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
+											<PairCard
+												data={pair}
+												prevData={null}
+												history={pairHistory}
+												chainLabel={config.name}
+												chainKey={key as ChainKey}
+												onEdit={openEdit}
+											/>
+										{/each}
+									</div>
+								{/if}
 							{/if}
 						{/if}
 
@@ -823,12 +844,23 @@
 		padding: 0.1rem 0.2rem;
 	}
 	.pairs-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		align-self: flex-start;
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: #94a3b8;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		margin-top: 0.25rem;
+		padding: 0.15rem 0.1rem;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+	}
+	.pairs-label:hover {
+		color: #475569;
 	}
 	.top-cards {
 		display: grid;

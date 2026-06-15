@@ -300,12 +300,12 @@
 	<div class="pair-header">
 		<div>
 			<h3>
-			{#if data.token0Symbol && data.token1Symbol}
-				UniPool — {data.token0Symbol}/{data.token1Symbol}{chainLabel ? ` (${chainLabel})` : ''}
-			{:else}
-				{data.symbol || shortenAddress(data.address)}
-			{/if}
-		</h3>
+				{#if data.token0Symbol && data.token1Symbol}
+					UniPool — {data.token0Symbol}/{data.token1Symbol}{chainLabel ? ` (${chainLabel})` : ''}
+				{:else}
+					{data.symbol || shortenAddress(data.address)}
+				{/if}
+			</h3>
 			<span class="pair-address" title={data.address}>{shortenAddress(data.address)}</span>
 		</div>
 		<button class="copy-btn" onclick={copyAll}>
