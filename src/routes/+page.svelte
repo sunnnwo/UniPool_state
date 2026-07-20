@@ -84,7 +84,6 @@
 	let activeEdit = $state<EditDraft | null>(null);
 	let editValues = $state<Record<string, string>>({});
 	let editError = $state<string | null>(null);
-	let expandAllSignal = $state(0);
 
 	// 검색 비교용 정규화 값입니다. 공백 제거 + 소문자 변환.
 	const normalizedQuery = $derived(searchQuery.trim().toLowerCase());
@@ -401,7 +400,6 @@
 	// 각 체인끼리는 서로 의존하지 않기 때문에 Promise.all로 동시에 시작합니다.
 	// 반환값은 Promise라서 버튼 클릭이나 다른 async 흐름에서 await할 수 있습니다.
 	async function loadAll() {
-		expandAllSignal += 1;
 		for (const key of chainKeys) {
 			chainCollapsed[key] = false;
 			pairsCollapsed[key] = false;
@@ -612,7 +610,6 @@
 										chainKey={key as ChainKey}
 										chainLabel={config.name}
 										onEdit={openEdit}
-										expandSignal={expandAllSignal}
 									/>
 								{/if}
 							</div>
@@ -643,7 +640,8 @@
 								{#if !pairsCollapsed[key as ChainKey]}
 									<div class="pairs-grid">
 										{#each visible as pair (pair.address)}
-											{@const pairHistory = states[key as ChainKey].pairHistory?.[pair.address] ?? []}
+											{@const pairHistory =
+												states[key as ChainKey].pairHistory?.[pair.address] ?? []}
 											<PairCard
 												data={pair}
 												prevData={null}
@@ -839,8 +837,7 @@
 		border: 1px solid rgba(148, 163, 184, 0.32);
 		border-radius: 10px;
 		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
-			#ffffff;
+			linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)), #ffffff;
 		box-shadow:
 			0 10px 26px rgba(15, 23, 42, 0.08),
 			inset 0 1px 0 rgba(255, 255, 255, 0.85);
